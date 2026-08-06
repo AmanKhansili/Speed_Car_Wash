@@ -14,8 +14,18 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* Main Tabs Group */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+        {/* Full Screen Page (Outside Tabs) */}
+        <Stack.Screen 
+          name="add-booking" 
+          options={{ 
+            headerShown: false,
+            presentation: "card", // Ya "modal" sliding animation ke liye
+          }} 
+        />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
