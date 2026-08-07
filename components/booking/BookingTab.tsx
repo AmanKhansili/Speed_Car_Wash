@@ -6,13 +6,11 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 
-// Dummy Data
 const BOOKINGS_DATA = [
   {
     id: "1",
@@ -54,122 +52,113 @@ export default function BookingsScreen() {
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
 
   const filteredBookings = BOOKINGS_DATA.filter(
-    (item) => item.type === activeTab
+    (item) => item.type === activeTab,
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* Tabs Bar */}
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setActiveTab("upcoming")}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === "upcoming" && styles.activeTabLabel,
-              ]}
-            >
-              Upcoming
-            </Text>
-            {activeTab === "upcoming" && <View style={styles.indicator} />}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setActiveTab("past")}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === "past" && styles.activeTabLabel,
-              ]}
-            >
-              Past
-            </Text>
-            {activeTab === "past" && <View style={styles.indicator} />}
-          </TouchableOpacity>
-        </View>
-
-        {/* Main Scroll View */}
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+    <View style={styles.container}>
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab("upcoming")}
+          activeOpacity={0.7}
         >
-          {/* Add Booking Button (Cleaned Single Touchable) */}
-          {activeTab === "upcoming" && (
-            <TouchableOpacity
-              style={styles.addBookingBtn}
-              activeOpacity={0.85}
-              onPress={() => router.push("/add-booking")}
-            >
-              <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-              <Text style={styles.addBookingBtnText}>Add New Booking</Text>
-            </TouchableOpacity>
-          )}
+          <Text
+            style={[
+              styles.tabLabel,
+              activeTab === "upcoming" && styles.activeTabLabel,
+            ]}
+          >
+            Upcoming
+          </Text>
+          {activeTab === "upcoming" && <View style={styles.indicator} />}
+        </TouchableOpacity>
 
-          {/* Cards List */}
-          {filteredBookings.length > 0 ? (
-            filteredBookings.map((item) => (
-              <View key={item.id} style={styles.card}>
-                {/* Left Side: Thumbnail + Badge */}
-                <View style={styles.leftCol}>
-                  <Image source={{ uri: item.image }} style={styles.cardImage} />
-                  <View
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab("past")}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.tabLabel,
+              activeTab === "past" && styles.activeTabLabel,
+            ]}
+          >
+            Past
+          </Text>
+          {activeTab === "past" && <View style={styles.indicator} />}
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {activeTab === "upcoming" && (
+          <TouchableOpacity
+            style={styles.addBookingBtn}
+            activeOpacity={0.85}
+            onPress={() => router.push("/booking/step1-selection")}
+          >
+            <Ionicons name="add-circle" size={20} color="#FFFFFF" />
+            <Text style={styles.addBookingBtnText}>Add New Booking</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Cards List */}
+        {filteredBookings.length > 0 ? (
+          filteredBookings.map((item) => (
+            <View key={item.id} style={styles.card}>
+              {/* Left Side: Thumbnail + Badge */}
+              <View style={styles.leftCol}>
+                <Image source={{ uri: item.image }} style={styles.cardImage} />
+                <View
+                  style={[
+                    styles.badge,
+                    item.status === "Confirmed" && styles.confirmedBadge,
+                    item.status === "Pending" && styles.pendingBadge,
+                    item.status === "Completed" && styles.completedBadge,
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.badge,
-                      item.status === "Confirmed" && styles.confirmedBadge,
-                      item.status === "Pending" && styles.pendingBadge,
-                      item.status === "Completed" && styles.completedBadge,
+                      styles.badgeText,
+                      item.status === "Confirmed" && styles.confirmedText,
+                      item.status === "Pending" && styles.pendingText,
+                      item.status === "Completed" && styles.completedText,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.badgeText,
-                        item.status === "Confirmed" && styles.confirmedText,
-                        item.status === "Pending" && styles.pendingText,
-                        item.status === "Completed" && styles.completedText,
-                      ]}
-                    >
-                      {item.status}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Right Side: Details & Price */}
-                <View style={styles.rightCol}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardDate}>{item.date}</Text>
-                  <Text style={styles.cardAddress} numberOfLines={1}>
-                    {item.address}
+                    {item.status}
                   </Text>
-                  <Text style={styles.cardPrice}>{item.price}</Text>
                 </View>
               </View>
-            ))
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
-              <Text style={styles.emptyText}>
-                No {activeTab} bookings available.
-              </Text>
+
+              {/* Right Side: Details & Price */}
+              <View style={styles.rightCol}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardDate}>{item.date}</Text>
+                <Text style={styles.cardAddress} numberOfLines={1}>
+                  {item.address}
+                </Text>
+                <Text style={styles.cardPrice}>{item.price}</Text>
+              </View>
             </View>
-          )}
-        </ScrollView>
-      </View>
-    </SafeAreaView>
+          ))
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
+            <Text style={styles.emptyText}>
+              No {activeTab} bookings available.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",

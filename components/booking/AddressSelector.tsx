@@ -2,17 +2,8 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { Address , AddressSelectorProps } from "@/types/service";
 
-export interface Address {
-  id: string;
-  tag: "Home" | "Work" | "Other";
-  addressLine1: string;
-  addressLine2: string;
-  landmark?: string;
-  isDefault?: boolean;
-}
-
-// Dummy Saved Addresses Data
 const SAVED_ADDRESSES: Address[] = [
   {
     id: "a1",
@@ -29,12 +20,6 @@ const SAVED_ADDRESSES: Address[] = [
     addressLine2: "Electronic City, Noida, Uttar Pradesh",
   },
 ];
-
-interface AddressSelectorProps {
-  selectedAddressId: string;
-  onSelectAddress: (id: string) => void;
-  onAddNewAddress?: () => void;
-}
 
 export default function AddressSelector({
   selectedAddressId,

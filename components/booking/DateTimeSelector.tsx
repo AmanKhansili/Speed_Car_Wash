@@ -13,7 +13,6 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 import Colors from "@/constants/colors";
 
-// Dynamic Days Generator
 const getNextDays = (daysCount = 14) => {
   const days = [];
   const today = new Date();
@@ -218,7 +217,7 @@ export default function DateTimeSelector({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 24,
-    marginTop: 50,
+    marginTop: 30,
   },
   sectionHeader: {
     paddingHorizontal: 16,

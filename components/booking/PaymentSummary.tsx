@@ -8,23 +8,38 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
-
-interface PaymentSummaryProps {
-  basePrice?: number;
-  taxes?: number;
-  discount?: number;
-  convenienceFee?: number;
-}
+import { PaymentSummaryProps } from "@/types/service";
 
 export default function PaymentSummary({
-  basePrice = 599,
-  taxes = 108, // 18% GST approx
+  bookingData,
+  basePrice: customBasePrice,
+  taxes: customTaxes,
   discount: initialDiscount = 0,
   convenienceFee = 49,
 }: PaymentSummaryProps) {
   const [couponCode, setCouponCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(initialDiscount);
   const [couponApplied, setCouponApplied] = useState(false);
+
+  // Helper function to extract numeric price from bookingData or props
+  const getCalculatedBasePrice = (): number => {
+    if (customBasePrice) return customBasePrice;
+
+    if (bookingData?.servicePrice) {
+      if (typeof bookingData.servicePrice === "number") {
+        return bookingData.servicePrice;
+      }
+      // String me se numeric value filter karna (e.g. "₹599" -> 599)
+      const numeric = bookingData.servicePrice.replace(/[^0-9]/g, "");
+      return numeric ? parseInt(numeric, 10) : 599;
+    }
+
+    return 599; // Default fallback price
+  };
+
+  const basePrice = getCalculatedBasePrice();
+  // Dynamic 18% GST calculation (agar custom taxes na mile to)
+  const taxes = customTaxes ?? Math.round(basePrice * 0.18);
 
   // Apply Coupon Handler
   const handleApplyCoupon = () => {
@@ -42,17 +57,66 @@ export default function PaymentSummary({
     setCouponApplied(false);
   };
 
-  // Calculations
-  const grandTotal = basePrice + taxes + convenienceFee - appliedDiscount;
+  const grandTotal = Math.max(
+    0,
+    basePrice + taxes + convenienceFee - appliedDiscount,
+  );
 
   return (
     <View style={styles.container}>
-      {/* Section Header */}
+      {bookingData && (
+        <View style={styles.overviewCard}>
+          <Text style={styles.overviewTitle}>Booking Overview</Text>
+          <View style={styles.overviewDivider} />
+
+          {bookingData.serviceTitle && (
+            <View style={styles.overviewRow}>
+              <Ionicons
+                name="car-sport-outline"
+                size={16}
+                color={Colors.primary}
+              />
+              <Text style={styles.overviewText}>
+                {bookingData.serviceTitle}{" "}
+                {bookingData.vehicleName ? `(${bookingData.vehicleName})` : ""}
+              </Text>
+            </View>
+          )}
+
+          {(bookingData.date || bookingData.time) && (
+            <View style={styles.overviewRow}>
+              <Ionicons
+                name="calendar-outline"
+                size={16}
+                color={Colors.primary}
+              />
+              <Text style={styles.overviewText}>
+                {bookingData.date || "Selected Date"} at{" "}
+                {bookingData.time || "Selected Slot"}
+              </Text>
+            </View>
+          )}
+
+          {bookingData.address && (
+            <View style={styles.overviewRow}>
+              <Ionicons
+                name="location-outline"
+                size={16}
+                color={Colors.primary}
+              />
+              <Text style={styles.overviewText} numberOfLines={1}>
+                {bookingData.addressText}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Payment Summary</Text>
+        <Text style={styles.sectionTitle}>Payment Breakdown</Text>
       </View>
 
-      {/* Coupon / Promo Code Card */}
+      {/* 2. Coupon / Promo Code Card */}
       <View style={styles.couponCard}>
         {!couponApplied ? (
           <View style={styles.couponInputWrapper}>
@@ -84,11 +148,7 @@ export default function PaymentSummary({
         ) : (
           <View style={styles.appliedCouponContainer}>
             <View style={styles.appliedTextWrapper}>
-              <Ionicons
-                name="checkmark-circle"
-                size={20}
-                color="#16A34A"
-              />
+              <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
               <Text style={styles.appliedCouponText}>
                 &lsquo;FIRST100&rsquo; Applied (₹100 OFF)
               </Text>
@@ -100,7 +160,7 @@ export default function PaymentSummary({
         )}
       </View>
 
-      {/* Bill Breakdown Box */}
+      {/* 3. Bill Breakdown Box */}
       <View style={styles.summaryCard}>
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Item Total (Service Price)</Text>
@@ -108,7 +168,7 @@ export default function PaymentSummary({
         </View>
 
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Taxes & Govt. Charges</Text>
+          <Text style={styles.rowLabel}>Taxes & Govt. Charges (18% GST)</Text>
           <Text style={styles.rowValue}>₹{taxes}</Text>
         </View>
 
@@ -141,7 +201,7 @@ export default function PaymentSummary({
         </View>
       </View>
 
-      {/* Trust & Safety Banner */}
+      {/* 4. Trust & Safety Banner */}
       <View style={styles.trustBanner}>
         <Ionicons
           name="shield-checkmark-outline"
@@ -161,6 +221,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 28,
   },
+  /* Booking Overview Card */
+  overviewCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    marginBottom: 16,
+  },
+  overviewTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.secondary,
+  },
+  overviewDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 10,
+  },
+  overviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  overviewText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.text,
+    flex: 1,
+  },
+
   sectionHeader: {
     marginBottom: 12,
   },
