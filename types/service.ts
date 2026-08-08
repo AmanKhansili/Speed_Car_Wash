@@ -1,15 +1,44 @@
 export interface Service {
   id: number;
-
   title: string;
-
   subtitle: string;
-
   price: number;
-
   rating: number;
-
   duration: string;
-
   image: string;
+}
+
+export interface BookingData {
+  vehicleId?: string;
+  vehicleName?: string;
+  serviceId?: string;
+  serviceTitle?: string;
+  servicePrice?: number | string; // e.g., 599 or "₹599"
+  date?: string;
+  time?: string;
+  address?: string;
+  addressText?: string;
+}
+
+export interface PaymentSummaryProps {
+  bookingData?: BookingData;
+  basePrice?: number;
+  taxes?: number;
+  discount?: number;
+  convenienceFee?: number;
+}
+
+export interface Address {
+  id: string;
+  tag: "Home" | "Work" | "Other";
+  addressLine1: string;
+  addressLine2: string;
+  landmark?: string;
+  isDefault?: boolean;
+}
+
+export interface AddressSelectorProps {
+  selectedAddressId: string;
+  onSelectAddress: (id: string) => void;
+  onAddNewAddress?: () => void;
 }

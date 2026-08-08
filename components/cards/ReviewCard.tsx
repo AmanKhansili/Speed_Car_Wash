@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: 16,
     marginRight: 16,
-    ...Shadow.light,
+    ...Shadow.card,
   },
   header: {
     flexDirection: "row",
