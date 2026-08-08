@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ServiceCard from "@/components/cards/ServiceCard";
 import SearchBar from "@/components/common/SearchBar";
 
-// 🚀 NAYA DATA IMPORT HERE
+// NAYA DATA IMPORT HERE
 import { categoriesList, servicesData } from "@/constants/data";
 
 const { width } = Dimensions.get("window");
@@ -27,7 +27,7 @@ export default function ServicesScreen() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // 🚀 MAGIC HAPPENS HERE: Filtering Logic
+  // Filtering Logic
   const filteredServices = servicesData.filter((service) => {
     const matchesCategory = activeCategory === "All" || service.category === activeCategory;
     const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -53,7 +53,6 @@ export default function ServicesScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryScroll}
         >
-          {/* CategoriesList ab constants/data se aa raha hai */}
           {categoriesList.map((cat, index) => (
             <TouchableOpacity
               key={index}

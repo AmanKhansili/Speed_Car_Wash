@@ -9,16 +9,16 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false, // We are using custom headers inside the screens
+        headerShown: false,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textLight,
         tabBarStyle: {
           backgroundColor: Colors.surface,
-          borderTopWidth: 0, // Removes the default grey line
+          borderTopWidth: 0,
           height: Platform.OS === "ios" ? 88 : 68,
           paddingBottom: Platform.OS === "ios" ? 28 : 12,
           paddingTop: 12,
-          ...Shadow.heavy, // Adds our premium soft shadow
+          ...Shadow.heavy,
         },
         tabBarLabelStyle: {
           fontSize: 10,

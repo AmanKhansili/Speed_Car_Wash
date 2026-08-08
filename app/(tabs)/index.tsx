@@ -185,5 +185,5 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 18, fontWeight: "800", color: Colors.text },
   viewAllText: { fontSize: 13, fontWeight: "700", color: Colors.primary },
-  horizontalScroll: { paddingLeft: 16, paddingRight: 8, paddingBottom: 16 }, // Added paddingBottom so shadows don't clip
+  horizontalScroll: { paddingLeft: 16, paddingRight: 8, paddingBottom: 16 }, 
 });
