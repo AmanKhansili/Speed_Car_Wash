@@ -1,68 +1,98 @@
-import { useMemo, useState } from "react";
-import { FlatList, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
-
 import Colors from "@/constants/colors";
-import Spacing from "@/constants/spacing";
-
-import { services, serviceCategories } from "@/constants/data";
-
-import CategoryTabs from "@/components/services/CategoryTabs";
-import ServiceCard from "@/components/cards/ServiceCard";
-
+import Radius from "@/constants/radius";
 import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import {
+  Dimensions,
+  FlatList,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import ServiceCard from "@/components/cards/ServiceCard";
+import SearchBar from "@/components/common/SearchBar";
+
+// 🚀 NAYA DATA IMPORT HERE
+import { categoriesList, servicesData } from "@/constants/data";
+
+const { width } = Dimensions.get("window");
+const cardWidth = (width - 48) / 2;
 
 export default function ServicesScreen() {
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredServices = useMemo(() => {
-    return services.filter((service) => {
-      const categoryMatch = selectedCategory === "All" || service.category === selectedCategory;
-
-      const searchMatch = service.title.toLowerCase().includes(search.toLowerCase());
-
-      return categoryMatch && searchMatch;
-    });
-  }, [selectedCategory, search]);
+  // 🚀 MAGIC HAPPENS HERE: Filtering Logic
+  const filteredServices = servicesData.filter((service) => {
+    const matchesCategory = activeCategory === "All" || service.category === activeCategory;
+    const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.heading}>Services</Text>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color={Colors.textSecondary} />
-
-        <TextInput
-          placeholder="Search services..."
-          placeholderTextColor={Colors.textSecondary}
-          value={search}
-          onChangeText={setSearch}
-          style={styles.input}
-        />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>All Services</Text>
+        <TouchableOpacity style={styles.iconBtn}>
+          <Ionicons name="filter" size={20} color={Colors.text} />
+        </TouchableOpacity>
       </View>
 
-      <CategoryTabs
-        categories={serviceCategories}
-        selected={selectedCategory}
-        onSelect={setSelectedCategory}
-      />
+      <SearchBar placeholder="Find a service..." onSearch={(text) => setSearchQuery(text)} />
+
+      <View style={styles.categoryContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+        >
+          {/* CategoriesList ab constants/data se aa raha hai */}
+          {categoriesList.map((cat, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[styles.categoryPill, activeCategory === cat && styles.activeCategoryPill]}
+              onPress={() => setActiveCategory(cat)}
+            >
+              <Text
+                style={[styles.categoryText, activeCategory === cat && styles.activeCategoryText]}
+              >
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       <FlatList
         data={filteredServices}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={styles.row}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={styles.listContent}
+        columnWrapperStyle={styles.columnWrapper}
         renderItem={({ item }) => (
           <ServiceCard
             title={item.title}
             subtitle={item.subtitle}
             price={item.price}
             rating={item.rating}
-            duration={item.duration}
+            reviews={item.reviews}
             image={item.image}
+            style={{ width: cardWidth, marginBottom: 16 }}
           />
+        )}
+        ListEmptyComponent={() => (
+          <View style={{ alignItems: "center", marginTop: 40 }}>
+            <Ionicons name="search-outline" size={40} color={Colors.textLight} />
+            <Text style={{ marginTop: 12, color: Colors.textSecondary }}>No services found</Text>
+          </View>
         )}
       />
     </SafeAreaView>
@@ -70,50 +100,31 @@ export default function ServicesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingHorizontal: Spacing.md,
-  },
-
-  heading: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: Colors.text,
-    marginTop: 20,
-  },
-
-  searchContainer: {
+  container: { flex: 1, backgroundColor: Colors.background },
+  header: {
     flexDirection: "row",
-    alignItems: "center",
-
-    backgroundColor: Colors.surface,
-
-    borderRadius: 18,
-
-    paddingHorizontal: 16,
-
-    marginTop: 18,
-
-    height: 56,
-  },
-
-  input: {
-    flex: 1,
-
-    marginLeft: 10,
-
-    fontSize: 15,
-
-    color: Colors.text,
-  },
-
-  list: {
-    paddingBottom: 120,
-  },
-
-  row: {
     justifyContent: "space-between",
-    marginBottom: 16,
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 12,
   },
+  iconBtn: { padding: 4 },
+  headerTitle: { fontSize: 20, fontWeight: "800", color: Colors.text },
+  categoryContainer: { marginBottom: 20 },
+  categoryScroll: { paddingLeft: 16, paddingRight: 8 },
+  categoryPill: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: Radius.round,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    marginRight: 12,
+  },
+  activeCategoryPill: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  categoryText: { fontSize: 13, fontWeight: "600", color: Colors.textSecondary },
+  activeCategoryText: { color: Colors.surface },
+  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  columnWrapper: { justifyContent: "space-between" },
 });

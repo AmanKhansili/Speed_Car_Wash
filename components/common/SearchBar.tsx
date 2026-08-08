@@ -1,21 +1,30 @@
-import { StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
+import Shadow from "@/constants/shadow";
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
 
-export default function SearchBar() {
+interface SearchBarProps {
+  placeholder?: string;
+  onSearch?: (text: string) => void;
+}
+
+export default function SearchBar({
+  placeholder = "Search services...",
+  onSearch,
+}: SearchBarProps) {
   return (
     <View style={styles.container}>
-      <Ionicons name="search" size={22} color={Colors.textSecondary} />
-
+      <Ionicons name="search" size={20} color={Colors.textLight} style={styles.icon} />
       <TextInput
-        placeholder="Search for services..."
-        placeholderTextColor={Colors.textSecondary}
         style={styles.input}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.textLight}
+        onChangeText={onSearch}
       />
-
-      <TouchableOpacity style={styles.filter}>
-        <Ionicons name="options-outline" size={22} color={Colors.primary} />
+      <TouchableOpacity style={styles.filterBtn}>
+        <Ionicons name="options-outline" size={20} color={Colors.primary} />
       </TouchableOpacity>
     </View>
   );
@@ -23,35 +32,27 @@ export default function SearchBar() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: Colors.surface,
+    marginHorizontal: 16,
+    height: 52,
+    borderRadius: Radius.xl,
     paddingHorizontal: 16,
-    height: 60,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    elevation: 4,
+    marginBottom: 20,
+    ...Shadow.light,
   },
-
+  icon: {
+    marginRight: 10,
+  },
   input: {
     flex: 1,
-    marginLeft: 10,
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text,
+    fontWeight: "500",
   },
-
-  filter: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
+  filterBtn: {
+    padding: 4,
+    marginLeft: 8,
   },
 });

@@ -1,115 +1,134 @@
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import Colors from "@/constants/colors";
+import Radius from "@/constants/radius";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Dimensions,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native"; 
+
+const { width } = Dimensions.get("window");
+const BANNER_WIDTH = width - 32;
+
+const bannerData = [
+  {
+    id: "1",
+    title: "Professional\nCar Wash",
+    sub: "At Your Doorstep",
+    color: "#0B1033",
+    image: require("@/assets/images/hero-car.png"),
+  },
+  {
+    id: "2",
+    title: "Premium\nCeramic Coating",
+    sub: "Long-lasting Shine",
+    color: "#1A1B41",
+    image: require("@/assets/images/banner3.png"),
+    imageStyle: { right: -50, top: 5, width: 350, height: 300 },
+  },
+  {
+    id: "3",
+    title: "Deep Interior\nSanitization",
+    sub: "Kills 99% Germs",
+    color: "#131039",
+    image: require("@/assets/images/banner2.png"),
+    imageStyle: { right: -50, top: -35, width: 300, height: 270 },
+  },
+];
 
 export default function HeroBanner() {
-  return (
-    <LinearGradient
-      colors={["#2563EB", "#1D4ED8"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
-      <View style={styles.left}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>PREMIUM</Text>
-        </View>
+  const flatListRef = useRef<FlatList>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-        <Text style={styles.title}>Premium{"\n"}Car Care</Text>
+  useEffect(() => {
+    const timer = setInterval(() => {
+      let nextIndex = currentIndex === bannerData.length - 1 ? 0 : currentIndex + 1;
+      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+      setCurrentIndex(nextIndex);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [currentIndex]);
 
-        <Text style={styles.subtitle}>Doorstep washing &{"\n"}detailing service</Text>
-
-        <View style={styles.bottomRow}>
-          <TouchableOpacity style={styles.button}>
-            <Text style={styles.buttonText}>Book Now</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.rating}>⭐ 4.9</Text>
-        </View>
+  const renderItem = ({ item }: { item: (typeof bannerData)[0] }) => (
+    <View style={[styles.card, { backgroundColor: item.color }]}>
+      <View style={styles.content}>
+        <Text style={styles.title}>{item.title}</Text>
+        <Text style={styles.sub}>{item.sub}</Text>
+        <TouchableOpacity style={styles.btn}>
+          <Text style={styles.btnText}>Book Now</Text>
+        </TouchableOpacity>
       </View>
 
-      <Image source={require("../../assets/images/asset_1.png")} style={styles.image} />
-    </LinearGradient>
+      <Image
+        source={item.image}
+        style={[styles.bannerImage, item.imageStyle]}
+        resizeMode="contain"
+      />
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        ref={flatListRef}
+        data={bannerData}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(event) => {
+          const index = Math.round(event.nativeEvent.contentOffset.x / BANNER_WIDTH);
+          setCurrentIndex(index);
+        }}
+      />
+      <View style={styles.pagination}>
+        {bannerData.map((_, index) => (
+          <View key={index} style={[styles.dot, currentIndex === index && styles.activeDot]} />
+        ))}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginTop: 20,
-    borderRadius: 24,
-    padding: 20,
-
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-
-    minHeight: 180,
+  container: { marginBottom: 24 },
+  card: {
+    width: BANNER_WIDTH,
+    height: 180,
+    borderRadius: Radius.xl,
+    marginHorizontal: 16,
+    padding: 24,
+    justifyContent: "center",
     overflow: "hidden",
+    position: "relative",
   },
+  content: { zIndex: 2, maxWidth: "60%" }, 
+  title: { fontSize: 18, fontWeight: "800", color: "#FFF", lineHeight: 24, marginBottom: 8 },
+  sub: { fontSize: 12, color: "#D1D5DB", marginBottom: 16 },
+  btn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    alignSelf: "flex-start",
+  },
+  btnText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
 
-  left: {
-    flex: 1,
-    paddingRight: 10,
+  bannerImage: {
+    position: "absolute",
+    right: -70,
+    top: -20,
+    width: 350,
+    height: 250,
     zIndex: 1,
   },
 
-  badge: {
-    backgroundColor: "rgba(255,255,255,.18)",
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-
-  badgeText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
-  title: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "800",
-    marginTop: 10,
-  },
-
-  subtitle: {
-    color: "#E5E7EB",
-    marginTop: 8,
-    lineHeight: 20,
-    fontSize: 14,
-  },
-
-  bottomRow: {
-    marginTop: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  button: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-
-  buttonText: {
-    color: "#2563EB",
-    fontWeight: "700",
-  },
-
-  rating: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-
-  image: {
-    width: 450,
-    height: 450,
-    resizeMode: "contain",
-    position: "absolute",
-    right: -200,
-    top: -140,
-  },
+  pagination: { flexDirection: "row", justifyContent: "center", marginTop: 12 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D1D5DB", marginHorizontal: 4 },
+  activeDot: { width: 16, backgroundColor: Colors.primary },
 });

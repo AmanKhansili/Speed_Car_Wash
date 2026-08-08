@@ -1,20 +1,19 @@
 const Colors = {
-  primary: "#2563EB",
-  secondary: "#0F172A",
+  primary: "#5D3FD3",
+  primaryLight: "#F3F0FF",
 
-  success: "#22C55E",
-  warning: "#F59E0B",
-  danger: "#EF4444",
-
-  background: "#F8FAFC",
+  background: "#F9FAFB",
   surface: "#FFFFFF",
 
   text: "#111827",
   textSecondary: "#6B7280",
+  textLight: "#9CA3AF",
 
-  border: "#E5E7EB",
+  border: "#F3F4F6",
 
-  shadow: "#00000020",
+  success: "#10B981",
+  warning: "#FBBF24",
+  error: "#EF4444",
 };
 
 export default Colors;
