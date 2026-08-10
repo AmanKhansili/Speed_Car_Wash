@@ -11,7 +11,7 @@ export default function BookingLayout() {
       }}
     >
       <Stack.Screen name="step1-selection" options={{ title: "Select Vehicle & Service" }} />
-      <Stack.Screen name="step2-datetime" options={{ title: "Select Date & Time" }} />
+      <Stack.Screen name="step2-datetime" options={{ title: "Select Your Preference" }} />
       {/* <Stack.Screen name="step3-location" options={{ title: "Select Location" }} /> */}
       <Stack.Screen name="step4-summary" options={{ title: "Booking Summary" }} />
     </Stack>

@@ -83,7 +83,6 @@ export default function HeroBanner() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        // 1. Fixed dimensions calculate karne ke liye (Item + Margin = Screen Width)
         getItemLayout={(_, index) => ({
           length: width,
           offset: width * index,
