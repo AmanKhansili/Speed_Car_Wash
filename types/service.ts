@@ -16,8 +16,10 @@ export interface BookingData {
   servicePrice?: number | string; // e.g., 599 or "₹599"
   date?: string;
   time?: string;
+  serviceType?: "pickup" | "walkin"; // Doorstep Pickup ya Walk-in Center
   address?: string;
   addressText?: string;
+  phone?: string; // Contact mobile number
 }
 
 export interface PaymentSummaryProps {

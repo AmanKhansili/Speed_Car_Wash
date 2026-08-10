@@ -9,7 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from "react-native"; 
+} from "react-native";
 
 const { width } = Dimensions.get("window");
 const BANNER_WIDTH = width - 32;
@@ -47,9 +47,11 @@ export default function HeroBanner() {
   useEffect(() => {
     const timer = setInterval(() => {
       let nextIndex = currentIndex === bannerData.length - 1 ? 0 : currentIndex + 1;
+      
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
       setCurrentIndex(nextIndex);
     }, 3500);
+
     return () => clearInterval(timer);
   }, [currentIndex]);
 
@@ -81,8 +83,21 @@ export default function HeroBanner() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
+        // 1. Fixed dimensions calculate karne ke liye (Item + Margin = Screen Width)
+        getItemLayout={(_, index) => ({
+          length: width,
+          offset: width * index,
+          index,
+        })}
+        // 2. Agar layout render na hua ho toh crash se bachane ke liye
+        onScrollToIndexFailed={(info) => {
+          const wait = new Promise((resolve) => setTimeout(resolve, 500));
+          wait.then(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+          });
+        }}
         onMomentumScrollEnd={(event) => {
-          const index = Math.round(event.nativeEvent.contentOffset.x / BANNER_WIDTH);
+          const index = Math.round(event.nativeEvent.contentOffset.x / width);
           setCurrentIndex(index);
         }}
       />
@@ -107,7 +122,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative",
   },
-  content: { zIndex: 2, maxWidth: "60%" }, 
+  content: { zIndex: 2, maxWidth: "60%" },
   title: { fontSize: 18, fontWeight: "800", color: "#FFF", lineHeight: 24, marginBottom: 8 },
   sub: { fontSize: 12, color: "#D1D5DB", marginBottom: 16 },
   btn: {

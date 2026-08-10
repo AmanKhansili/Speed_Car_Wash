@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: Colors.secondary,
+    // color: Colors.secondary,
   },
   listContainer: {
     gap: 12,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
+    // shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
