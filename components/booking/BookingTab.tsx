@@ -1,15 +1,9 @@
-import React, { useState } from "react";
-import { useRouter } from "expo-router";
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import Shadow from "@/constants/shadow";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const BOOKINGS_DATA = [
   {
@@ -51,9 +45,7 @@ export default function BookingsScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
 
-  const filteredBookings = BOOKINGS_DATA.filter(
-    (item) => item.type === activeTab,
-  );
+  const filteredBookings = BOOKINGS_DATA.filter((item) => item.type === activeTab);
 
   return (
     <View style={styles.container}>
@@ -63,12 +55,7 @@ export default function BookingsScreen() {
           onPress={() => setActiveTab("upcoming")}
           activeOpacity={0.7}
         >
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === "upcoming" && styles.activeTabLabel,
-            ]}
-          >
+          <Text style={[styles.tabLabel, activeTab === "upcoming" && styles.activeTabLabel]}>
             Upcoming
           </Text>
           {activeTab === "upcoming" && <View style={styles.indicator} />}
@@ -79,22 +66,12 @@ export default function BookingsScreen() {
           onPress={() => setActiveTab("past")}
           activeOpacity={0.7}
         >
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === "past" && styles.activeTabLabel,
-            ]}
-          >
-            Past
-          </Text>
+          <Text style={[styles.tabLabel, activeTab === "past" && styles.activeTabLabel]}>Past</Text>
           {activeTab === "past" && <View style={styles.indicator} />}
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {activeTab === "upcoming" && (
           <TouchableOpacity
             style={styles.addBookingBtn}
@@ -148,9 +125,7 @@ export default function BookingsScreen() {
         ) : (
           <View style={styles.emptyContainer}>
             <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
-            <Text style={styles.emptyText}>
-              No {activeTab} bookings available.
-            </Text>
+            <Text style={styles.emptyText}>No {activeTab} bookings available.</Text>
           </View>
         )}
       </ScrollView>
@@ -225,12 +200,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderWidth: 1,
     borderColor: "#F1F5F9",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    width: "100%",
+    ...Shadow.card,
   },
   leftCol: {
     width: 85,

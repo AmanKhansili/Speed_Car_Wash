@@ -1,128 +1,114 @@
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
-import Spacing from "@/constants/spacing";
-import { Image } from "react-native";
+import Shadow from "@/constants/shadow";
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import {
+  Image,
+  ImageSourcePropType,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ViewStyle,
+} from "react-native";
 
-interface Props {
+interface ServiceCardProps {
   title: string;
   subtitle: string;
-  price: number;
-  rating: number;
-  duration: string;
-  image: any;
+  price: string;
+  rating: string;
+  reviews: string;
+  tag?: string;
+  image?: ImageSourcePropType; 
+  style?: StyleProp<ViewStyle>; 
 }
 
-export default function ServiceCard({ title, subtitle, price, rating, duration, image }: Props) {
+export default function ServiceCard({
+  title,
+  subtitle,
+  price,
+  rating,
+  reviews,
+  tag,
+  image,
+  style,
+}: ServiceCardProps) {
   return (
-    <TouchableOpacity style={styles.card}>
-      <Image source={image} style={styles.image} />
-
-      <Text style={styles.title}>{title}</Text>
-
-      <Text style={styles.subtitle}>{subtitle}</Text>
-
-      <View style={styles.infoRow}>
-        <View style={styles.rating}>
-          <Ionicons name="star" size={14} color="#F59E0B" />
-
-          <Text style={styles.smallText}>{rating}</Text>
-        </View>
-
-        <View style={styles.rating}>
-          <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
-
-          <Text style={styles.smallText}>{duration}</Text>
-        </View>
+    <View style={[styles.card, style]}>
+      <View style={styles.imageArea}>
+        {image && <Image source={image} style={styles.cardImage} resizeMode="cover" />}
+        {tag && (
+          <View style={styles.tagBadge}>
+            <Text style={styles.tagText}>{tag}</Text>
+          </View>
+        )}
       </View>
 
-      <View style={styles.bottomRow}>
-        <Text style={styles.price}>₹{price}</Text>
+      <View style={styles.content}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
 
-        <TouchableOpacity style={styles.button}>
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.metaRow}>
+          <Ionicons name="star" size={14} color={Colors.warning} />
+          <Text style={styles.ratingText}>{rating}</Text>
+          <Text style={styles.reviewText}>({reviews} reviews)</Text>
+        </View>
+
+        <View style={styles.priceRow}>
+          <Text style={styles.priceText}>{price}</Text>
+          <TouchableOpacity style={styles.addBtn}>
+            <Ionicons name="add" size={20} color={Colors.surface} />
+          </TouchableOpacity>
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    width: 210,
+    width: 200, // Default width Home screen ke liye
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
-    padding: Spacing.md,
-    marginRight: 16,
+    padding: 12,
+    ...Shadow.card,
   },
-
-  imageBox: {
-    height: 120,
+  imageArea: {
+    height: 110,
+    backgroundColor: Colors.border,
     borderRadius: Radius.lg,
-    backgroundColor: "#d9e0ea",
-
-    justifyContent: "center",
-    alignItems: "center",
-
-    marginBottom: 16,
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: Colors.text,
-  },
-
-  subtitle: {
-    color: Colors.textSecondary,
-    marginTop: 5,
     marginBottom: 12,
+    position: "relative",
+    overflow: "hidden",
   },
-
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  rating: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  smallText: {
-    marginLeft: 5,
-    color: Colors.textSecondary,
-  },
-
-  bottomRow: {
-    marginTop: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  price: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: Colors.primary,
-  },
-
-  button: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+  cardImage: { width: "100%", height: "100%" },
+  tagBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
     backgroundColor: Colors.primary,
-
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.md,
+    zIndex: 10,
+  },
+  tagText: { color: Colors.surface, fontSize: 10, fontWeight: "bold" },
+  content: { paddingHorizontal: 4 },
+  title: { fontSize: 15, fontWeight: "800", color: Colors.text },
+  subtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, marginBottom: 8 },
+  metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  ratingText: { fontSize: 12, fontWeight: "700", color: Colors.text, marginLeft: 4 },
+  reviewText: { fontSize: 11, color: Colors.textLight, marginLeft: 4 },
+  priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  priceText: { fontSize: 20, fontWeight: "800", color: Colors.primary },
+  addBtn: {
+    backgroundColor: Colors.primary,
+    width: 32,
+    height: 32,
+    borderRadius: Radius.round,
     justifyContent: "center",
     alignItems: "center",
-  },
-
-  image: {
-    width: "100%",
-    height: 120,
-    resizeMode: "contain",
-    marginBottom: 12,
   },
 });

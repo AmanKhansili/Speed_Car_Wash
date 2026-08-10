@@ -1,140 +1,179 @@
-import { Ionicons } from "@expo/vector-icons";
-
-export interface Service {
-  id: number;
-  title: string;
-  subtitle: string;
-  category: "Wash" | "Interior" | "Detailing" | "Coating";
-  price: number;
-  rating: number;
-  duration: string;
-  image: any;
-}
-
-export const services: Service[] = [
+export const servicesData = [
   {
-    id: 1,
-    title: "Exterior Wash",
-    subtitle: "Shine Like New",
+    id: "1",
+    title: "Silver Wash",
+    subtitle: "Vacuum, Shampoo & Underbody",
+    price: "₹450",
+    rating: "4.7",
+    reviews: "124",
     category: "Wash",
-    price: 299,
-    rating: 4.9,
-    duration: "45 min",
-    image: require("../assets/images/asset_1.png"),
+    image: require("@/assets/images/services/exterior.png"),
+    description: "Complete vacuuming of cars incl. seats and boot...",
   },
   {
-    id: 2,
-    title: "Interior Cleaning",
-    subtitle: "Fresh & Clean",
+    id: "2",
+    title: "Gold Wash",
+    subtitle: "Silver Wash + Alloys & Dashboard",
+    price: "₹600",
+    rating: "4.8",
+    reviews: "89",
+    category: "Wash",
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/gold-wash.jpg",
+    },
+    description: "Complete vacuuming of cars incl. seats and boot...",
+  },
+  {
+    id: "3",
+    title: "Platinum Wash",
+    subtitle: "Foam Wash, Interior Dry Clean & Polish",
+    price: "₹1600",
+    rating: "4.9",
+    reviews: "56",
+    category: "Wash",
+    image: { uri: "https://img.freepik.com/free-photo/car-wash-detailing-station_1303-22307.jpg" },
+    description: "Complete dry cleaning of a interior...",
+  },
+  {
+    id: "4",
+    title: "Intensive Internal",
+    subtitle: "Deep Dry Clean & Vinyl Dressing",
+    price: "₹1350",
+    rating: "4.9",
+    reviews: "42",
     category: "Interior",
-    price: 499,
-    rating: 4.8,
-    duration: "60 min",
-    image: require("../assets/images/asset_2.png"),
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/internal-clean.jpg",
+    },
+    description: "Complete dry cleaning of a interior including seats...",
   },
   {
-    id: 3,
-    title: "Car Detailing",
-    subtitle: "Premium Finish",
+    id: "5",
+    title: "Wax Rubbing & Buffing",
+    subtitle: "Scratch Repair & Paint Gloss Restore",
+    price: "₹1700",
+    rating: "4.8",
+    reviews: "75",
     category: "Detailing",
-    price: 999,
-    rating: 5.0,
-    duration: "90 min",
-    image: require("../assets/images/asset_4.png"),
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/rubbing.jpg",
+    },
+    description: "Over the time cars paint erodes due to the effects of sunlight...",
   },
   {
-    id: 4,
-    title: "Ceramic Coating",
-    subtitle: "Long Lasting",
+    id: "6",
+    title: "Teflon Coating",
+    subtitle: "PTFE Polymer Paint Protection",
+    price: "₹2800",
+    rating: "5.0",
+    reviews: "34",
     category: "Coating",
-    price: 1499,
-    rating: 5.0,
-    duration: "120 min",
-    image: require("../assets/images/asset_5.png"),
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/teflon-coating.jpg",
+    },
+    description: "Our PTFE based Polymer paint sealant creates slippery...",
   },
   {
-    id: 5,
-    title: "Premium Polish",
-    subtitle: "Mirror Finish",
+    id: "7",
+    title: "Engine Degreasing",
+    subtitle: "High Gloss Coating & Rat Repellent",
+    price: "₹900",
+    rating: "4.8",
+    reviews: "62",
     category: "Detailing",
-    price: 799,
-    rating: 4.9,
-    duration: "70 min",
-    image: require("../assets/images/asset_6.png"),
+    image: {
+      uri: "https://img.freepik.com/free-photo/auto-mechanic-working-garage-repair-service_146671-19690.jpg",
+    },
+    description:
+      "This treatment provides a high gloss and slippery coating on to the engine parts, preventing hoses from being bitten by rats...",
+  },
+  {
+    id: "8",
+    title: "A.C. Treatment",
+    subtitle: "Disinfects Ducts & Removes Odors",
+    price: "₹900",
+    rating: "4.7",
+    reviews: "84",
+    category: "Interior",
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/ac-treatment.png",
+    },
+    description:
+      "Designed to disinfect the Air conditioner ducts, stop buildup of mould, and improve in-car air quality...",
+  },
+  {
+    id: "9",
+    title: "Alloy Descaling",
+    subtitle: "Restores Sheen & Protects from Dust",
+    price: "₹800",
+    rating: "4.9",
+    reviews: "110",
+    category: "Detailing",
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/tyre-treatment.png",
+    },
+    description:
+      "Intensive cleaning and protection of alloy wheels, restoring lost sheen and ensuring long-term protection from brake dust and grime...",
+  },
+  {
+    id: "10",
+    title: "Headlight Restore",
+    subtitle: "Clears Oxidation for Better Night Vision",
+    price: "₹700",
+    rating: "4.6",
+    reviews: "95",
+    category: "Detailing",
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/head-light-restoration.png",
+    },
+    description:
+      "Radically improves headlight visibility by clearing hard water marks and oxidation from the glass for safer night driving...",
+  },
+  {
+    id: "11",
+    title: "Upholstery Protect",
+    subtitle: "Thorough Stain Removal & Fabric Restore",
+    price: "₹1500",
+    rating: "4.8",
+    reviews: "47",
+    category: "Interior",
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/up-protection.png",
+    },
+    description:
+      "Removes tough stains like chocolates, coffee/tea from carpets, vinyl, fabric, and plastics, leaving interiors fresh with no odor...",
+  },
+  {
+    id: "12",
+    title: "Windshield Treat",
+    subtitle: "Clear Vision in Rain & Night Driving",
+    price: "₹1500",
+    rating: "4.9",
+    reviews: "132",
+    category: "Coating",
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/car-wind-sheild.png",
+    },
+    description:
+      "Cleans and protects windshield, removing hard water marks and oxidation to provide clear vision during rainy seasons and night...",
+  },
+  {
+    id: "13",
+    title: "Leather Condition",
+    subtitle: "Deep Clean & Condition for Rich Look",
+    price: "₹1000",
+    rating: "4.8",
+    reviews: "76",
+    category: "Interior",
+    image: {
+      uri: "https://www.speedcarwash.com/images/services/leather-coating.png",
+    },
+    description:
+      "Intensive cleansing and conditioning of leather interiors, removing tough stains and restoring seats with no bad odors...",
   },
 ];
 
-export interface MembershipPlan {
-  id: number;
-  title: string;
-  subtitle: string;
-  price: number;
-  duration: "Monthly" | "Quarterly";
-  savings: string;
-  popular: boolean;
-  color: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  features: string[];
-}
-
-export const membershipPlans: MembershipPlan[] = [
-  {
-    id: 1,
-    title: "Basic Care",
-    subtitle: "Perfect for regular maintenance",
-    price: 899,
-    duration: "Monthly",
-    savings: "Save 10%",
-    popular: false,
-    color: "#EEF4FF",
-    icon: "car-sport-outline",
-    features: ["3 Exterior Washes", "Basic Interior Vacuum", "Priority Slot", "5% Discount"],
-  },
-  {
-    id: 2,
-    title: "Premium Care",
-    subtitle: "Most Loved Plan",
-    price: 1599,
-    duration: "Monthly",
-    savings: "Save 20%",
-    popular: true,
-    color: "#2563EB",
-    icon: "diamond-outline",
-    features: ["6 Premium Washes", "Interior Cleaning", "Free Pickup", "Priority Booking"],
-  },
-  {
-    id: 3,
-    title: "Elite Care",
-    subtitle: "Luxury Experience",
-    price: 2399,
-    duration: "Monthly",
-    savings: "Save 30%",
-    popular: false,
-    color: "#FFF7E6",
-    icon: "star-outline",
-    features: ["Unlimited Exterior Wash", "Premium Detailing", "VIP Support", "Ceramic Discount"],
-  },
+export const categoriesList = [
+  "All",
+  ...Array.from(new Set(servicesData.map((item) => item.category))),
 ];
-
-export const reviews = [
-  {
-    id: 1,
-    name: "Rahul Sharma",
-    rating: 5,
-    review: "Amazing doorstep service. My car looked brand new after the wash.",
-  },
-  {
-    id: 2,
-    name: "Aman Gupta",
-    rating: 5,
-    review: "Very professional team and on-time service. Highly recommended.",
-  },
-  {
-    id: 3,
-    name: "Priya Verma",
-    rating: 4,
-    review: "Loved the interior cleaning. Booking process was smooth and easy.",
-  },
-];
-
-export const serviceCategories = ["All", "Wash", "Interior", "Detailing", "Coating"];

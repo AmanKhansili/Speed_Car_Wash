@@ -1,28 +1,39 @@
-import { StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
-import Spacing from "@/constants/spacing";
+import Shadow from "@/constants/shadow";
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { StyleSheet, Text, View } from "react-native";
 
-interface Props {
+interface ReviewProps {
   name: string;
-  review: string;
   rating: number;
+  review: string;
 }
 
-export default function ReviewCard({ name, review, rating }: Props) {
+export default function ReviewCard({ name, rating, review }: ReviewProps) {
   return (
     <View style={styles.card}>
-      <View style={styles.stars}>
-        {[...Array(rating)].map((_, index) => (
-          <Ionicons key={index} name="star" size={16} color="#F59E0B" />
-        ))}
+      <View style={styles.header}>
+        <View style={styles.avatarPlaceholder}>
+          <Ionicons name="person" size={20} color={Colors.textLight} />
+        </View>
+        <View style={styles.headerText}>
+          <Text style={styles.name}>{name}</Text>
+          <View style={styles.stars}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Ionicons
+                key={i}
+                name="star"
+                size={12}
+                color={i < rating ? Colors.warning : Colors.border}
+                style={{ marginRight: 2 }}
+              />
+            ))}
+          </View>
+        </View>
       </View>
-
-      <Text style={styles.review}>{review}</Text>
-
-      <Text style={styles.name}>{name}</Text>
+      <Text style={styles.reviewText}>{review}</Text>
     </View>
   );
 }
@@ -31,26 +42,40 @@ const styles = StyleSheet.create({
   card: {
     width: 260,
     backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    padding: 16,
     marginRight: 16,
+    ...Shadow.card,
   },
-
-  stars: {
+  header: {
     flexDirection: "row",
-    marginBottom: 10,
+    alignItems: "center",
+    marginBottom: 12,
   },
-
-  review: {
-    color: Colors.textSecondary,
-    lineHeight: 22,
-    fontSize: 14,
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.round,
+    backgroundColor: Colors.background,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
-
+  headerText: {
+    flex: 1,
+  },
   name: {
-    marginTop: 18,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
     color: Colors.text,
+    marginBottom: 2,
+  },
+  stars: {
+    flexDirection: "row",
+  },
+  reviewText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 20,
   },
 });
