@@ -1,7 +1,8 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export interface MenuItem {
   id: string;
@@ -83,6 +84,8 @@ interface ProfileMenuListProps {
 }
 
 export default function ProfileMenuList({ onItemPress }: ProfileMenuListProps) {
+  const router = useRouter();
+
   const handlePress = (id: string) => {
     if (onItemPress) onItemPress(id);
   };
@@ -95,23 +98,11 @@ export default function ProfileMenuList({ onItemPress }: ProfileMenuListProps) {
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.7}
-            style={[
-              styles.menuItem,
-              index !== MENU_ITEMS.length - 1 && styles.borderBottom,
-            ]}
-            onPress={() => handlePress(item.id)}
+            style={[styles.menuItem, index !== MENU_ITEMS.length - 1 && styles.borderBottom]}
+            onPress={() => router.push(`/${item.id}` as any)}
           >
-            <View
-              style={[
-                styles.iconBadge,
-                { backgroundColor: item.bgColor || "#78b7ef" },
-              ]}
-            >
-              <Ionicons
-                name={item.icon}
-                size={18}
-                color={Colors.primary}
-              />
+            <View style={[styles.iconBadge, { backgroundColor: item.bgColor || "#78b7ef" }]}>
+              <Ionicons name={item.icon} size={18} color={Colors.primary} />
             </View>
 
             <View style={styles.textWrapper}>
@@ -130,28 +121,15 @@ export default function ProfileMenuList({ onItemPress }: ProfileMenuListProps) {
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.7}
-            style={[
-              styles.menuItem,
-              index !== SECONDARY_ITEMS.length - 1 && styles.borderBottom,
-            ]}
+            style={[styles.menuItem, index !== SECONDARY_ITEMS.length - 1 && styles.borderBottom]}
             onPress={() => handlePress(item.id)}
           >
-            <View
-              style={[
-                styles.iconBadge,
-                { backgroundColor: item.bgColor || "#F1F5F9" },
-              ]}
-            >
+            <View style={[styles.iconBadge, { backgroundColor: item.bgColor || "#F1F5F9" }]}>
               <Ionicons name={item.icon} size={18} color={item.iconColor} />
             </View>
 
             <View style={styles.textWrapper}>
-              <Text
-                style={[
-                  styles.menuTitle,
-                  item.isDanger && styles.dangerTitle,
-                ]}
-              >
+              <Text style={[styles.menuTitle, item.isDanger && styles.dangerTitle]}>
                 {item.title}
               </Text>
               <Text style={styles.menuSubtitle}>{item.subtitle}</Text>

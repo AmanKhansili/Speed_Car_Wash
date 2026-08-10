@@ -10,9 +10,9 @@ export default function QuickActions() {
 
   const actions = [
     { id: "1", title: "Services", icon: "car-sport", route: "/services" },
-    { id: "2", title: "Membership", icon: "diamond", route: "/profile" },
+    { id: "2", title: "Membership", icon: "diamond", route: "/membership" },
     { id: "3", title: "Bookings", icon: "calendar", route: "/bookings" },
-    { id: "4", title: "Offers", icon: "pricetag", route: "/services" },
+    { id: "4", title: "Offers", icon: "pricetag", route: "/profile" },
   ];
 
   return (
@@ -21,7 +21,7 @@ export default function QuickActions() {
         <TouchableOpacity
           key={action.id}
           style={styles.actionItem}
-          onPress={() => router.push(action.route as any)}
+          onPress={() => router.push(`${action.route}` as any)}
         >
           <View style={styles.iconBox}>
             <Ionicons name={action.icon as any} size={24} color={Colors.primary} />

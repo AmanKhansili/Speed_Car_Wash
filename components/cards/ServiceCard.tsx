@@ -23,7 +23,7 @@ interface ServiceCardProps {
   tag?: string;
   image?: ImageSourcePropType | { uri: string };
   style?: StyleProp<ViewStyle>;
-  onPress?: () => void; // 👈 1. Naya prop add kiya
+  onPress?: () => void; 
 }
 
 export default function ServiceCard({
@@ -38,7 +38,6 @@ export default function ServiceCard({
   onPress,
 }: ServiceCardProps) {
   return (
-    // 👈 2. View ko TouchableOpacity me badal diya
     <TouchableOpacity style={[styles.card, style]} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.imageArea}>
         {image && <Image source={image as any} style={styles.cardImage} resizeMode="cover" />}
