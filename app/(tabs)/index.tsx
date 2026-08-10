@@ -1,8 +1,7 @@
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
-import Shadow from "@/constants/shadow";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Image,
   ScrollView,
@@ -20,9 +19,47 @@ import SectionTitle from "@/components/common/SectionTitle";
 import HeroBanner from "@/components/home/HeroBanner";
 import MembershipBanner from "@/components/home/MembershipBanner";
 import QuickActions from "@/components/home/QuickActions";
+import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 
 export default function HomeScreen() {
+  const [address, setAddress] = useState("Fetching location...");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // 🚀 3. User se Location ki Permission mango
+        let { status } = await Location.requestForegroundPermissionsAsync();
+
+        if (status !== "granted") {
+          // Agar user 'Deny' kar de, toh ek default location set kar do
+          setAddress("Delhi, India");
+          return;
+        }
+
+        // 🚀 4. Current Coordinates (Lat/Lng) nikalo
+        let location = await Location.getCurrentPositionAsync({});
+
+        // 🚀 5. Coordinates ko real address mein convert karo
+        let geoCode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        // 🚀 6. Address ko format karke UI par dikha do
+        if (geoCode.length > 0) {
+          const currentPlace = geoCode[0];
+          // Ye kuch aisa dikhega: "Connaught Place, Delhi"
+          const formattedAddress = `${currentPlace.district || currentPlace.city}, ${currentPlace.region}`;
+          setAddress(formattedAddress);
+        }
+      } catch (error) {
+        console.log("Location Error:", error);
+        setAddress("Delhi, India"); // Fallback location
+      }
+    })();
+  }, []);
+
   const router = useRouter();
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -31,7 +68,7 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* HEADER */}
         <View style={styles.header}>
-          <View style={styles.logoPlaceholder}>
+          <View>
             <Image
               source={require("@/assets/logo/logo.png")}
               style={{ width: 70, height: 50 }}
@@ -39,9 +76,22 @@ export default function HomeScreen() {
             />
           </View>
 
-          <View style={styles.locationWrapper}>
-            <Ionicons name="location" size={16} color={Colors.primary} />
-            <Text style={styles.locationText}>Delhi, India</Text>
+          <View style={styles.locationContainer}>
+            <View>
+              <Text style={styles.locationLabel}>
+                <Ionicons name="location" size={11} color="#EF4444" />
+                Current Location
+              </Text>
+              <Text style={styles.locationText}>
+                {address}
+                <Ionicons
+                  name="chevron-down"
+                  size={12}
+                  color="#6B7280"
+                  style={{ alignSelf: "center" }}
+                />
+              </Text>
+            </View>
           </View>
 
           <TouchableOpacity style={styles.notificationBtn}>
@@ -53,7 +103,7 @@ export default function HomeScreen() {
         {/* GREETING */}
         <View style={styles.greetingSection}>
           <Text style={styles.greetingTitle}>Hello, Aman 👋</Text>
-          <Text style={styles.greetingSub}>Keep your car clean,{"\n"}Keep your ride fresh</Text>
+          <Text style={styles.greetingSub}>Keep your car clean, Keep your ride fresh</Text>
         </View>
 
         <HeroBanner />
@@ -136,31 +186,16 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 70 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 15,
+    // paddingTop: 16,
+    paddingBottom: 10,
   },
-  logoPlaceholder: {
-    justifyContent: "center",
-    height: 40,
-  },
-  logoText: { fontSize: 16, fontWeight: "900", color: Colors.text, fontStyle: "italic" },
-  logoSubText: { fontSize: 10, fontWeight: "800", color: "#3B82F6" },
-  locationWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.xl,
-    ...Shadow.light,
-  },
-  locationText: { fontSize: 13, fontWeight: "600", color: Colors.text, marginLeft: 4 },
+
   notificationBtn: { padding: 4 },
   notificationDot: {
     position: "absolute",
@@ -185,5 +220,9 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 18, fontWeight: "800", color: Colors.text },
   viewAllText: { fontSize: 13, fontWeight: "700", color: Colors.primary },
-  horizontalScroll: { paddingLeft: 16, paddingRight: 8, paddingBottom: 16 }, 
+  horizontalScroll: { paddingLeft: 16, paddingRight: 8, paddingBottom: 16 },
+
+  locationContainer: { flexDirection: "row", alignItems: "center", gap: 6 },
+  locationLabel: { fontSize: 11, color: "#6B7280", fontWeight: "600", textAlign: "center" },
+  locationText: { fontSize: 12, color: Colors.text, fontWeight: "700", textAlign: "center" },
 });
