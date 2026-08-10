@@ -1,7 +1,7 @@
-import React from "react";
-import { View, Text, StyleSheet, Image, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface UserInfoCardProps {
   name?: string;
@@ -16,26 +16,18 @@ interface UserInfoCardProps {
 export default function UserInfoCard({
   name = "Amanjeet Kumar",
   isPremium = true,
-  phone = "+91 70374 89355",
+  phone = "+91 7025 89335",
   email = "amanjeetkumar@email.com",
   avatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80",
   onEditPress,
   onChangeAvatar,
 }: UserInfoCardProps) {
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      style={styles.cardContainer}
-      onPress={onEditPress}
-    >
+    <TouchableOpacity activeOpacity={0.85} style={styles.cardContainer} onPress={onEditPress}>
       {/* Left: Avatar with Camera Badge */}
       <View style={styles.avatarWrapper}>
         <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-        <TouchableOpacity
-          style={styles.cameraBadge}
-          activeOpacity={0.8}
-          onPress={onChangeAvatar}
-        >
+        <TouchableOpacity style={styles.cameraBadge} activeOpacity={0.8} onPress={onChangeAvatar}>
           <Ionicons name="camera" size={12} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -57,21 +49,13 @@ export default function UserInfoCard({
 
         {/* Phone */}
         <View style={styles.detailRow}>
-          <Ionicons
-            name="call-outline"
-            size={13}
-            color={Colors.textSecondary || "#64748B"}
-          />
+          <Ionicons name="call-outline" size={13} color={Colors.textSecondary || "#64748B"} />
           <Text style={styles.detailText}>{phone}</Text>
         </View>
 
         {/* Email */}
         <View style={styles.detailRow}>
-          <Ionicons
-            name="mail-outline"
-            size={13}
-            color={Colors.textSecondary || "#64748B"}
-          />
+          <Ionicons name="mail-outline" size={13} color={Colors.textSecondary || "#64748B"} />
           <Text style={styles.detailText} numberOfLines={1}>
             {email}
           </Text>
@@ -114,7 +98,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 0,
     right: 0,
-    backgroundColor: Colors.primary, 
+    backgroundColor: Colors.primary,
     width: 22,
     height: 22,
     borderRadius: 11,
