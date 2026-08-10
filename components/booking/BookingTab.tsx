@@ -180,11 +180,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 14,
     marginBottom: 16,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
+    ...Shadow.light,
   },
   addBookingBtnText: {
     color: "#FFFFFF",

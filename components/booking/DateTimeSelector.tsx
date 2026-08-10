@@ -1,17 +1,9 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Platform,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
 import Colors from "@/constants/colors";
+import Shadow from "@/constants/shadow";
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import React, { useState } from "react";
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const getNextDays = (daysCount = 14) => {
   const days = [];
@@ -21,9 +13,7 @@ const getNextDays = (daysCount = 14) => {
     const d = new Date();
     d.setDate(today.getDate() + i);
 
-    const dayName = d
-      .toLocaleDateString("en-US", { weekday: "short" })
-      .toUpperCase();
+    const dayName = d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
     const dateNum = d.getDate().toString().padStart(2, "0");
     const fullDate = d.toISOString().split("T")[0];
 
@@ -68,10 +58,7 @@ export default function DateTimeSelector({
   const [calendarDate, setCalendarDate] = useState(new Date());
 
   // Handle Native Calendar Selection
-  const handleCalendarChange = (
-    event: DateTimePickerEvent,
-    date?: Date
-  ) => {
+  const handleCalendarChange = (event: DateTimePickerEvent, date?: Date) => {
     setShowDatePicker(Platform.OS === "ios");
     if (date) {
       setCalendarDate(date);
@@ -109,26 +96,13 @@ export default function DateTimeSelector({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.8}
-              style={[
-                styles.dateCard,
-                isSelected && styles.selectedDateCard,
-              ]}
+              style={[styles.dateCard, isSelected && styles.selectedDateCard]}
               onPress={() => onSelectDate(item.id)}
             >
-              <Text
-                style={[
-                  styles.dayNameText,
-                  isSelected && styles.selectedDayNameText,
-                ]}
-              >
+              <Text style={[styles.dayNameText, isSelected && styles.selectedDayNameText]}>
                 {item.dayName}
               </Text>
-              <Text
-                style={[
-                  styles.dateNumText,
-                  isSelected && styles.selectedDateNumText,
-                ]}
-              >
+              <Text style={[styles.dateNumText, isSelected && styles.selectedDateNumText]}>
                 {item.dateNum}
               </Text>
             </TouchableOpacity>
@@ -143,14 +117,8 @@ export default function DateTimeSelector({
           activeOpacity={0.7}
           onPress={() => setShowDatePicker(true)}
         >
-          <Ionicons
-            name="calendar-clear-outline"
-            size={14}
-            color={Colors.primary}
-          />
-          <Text style={styles.calendarTriggerText}>
-            {getFormattedCustomDateText()}
-          </Text>
+          <Ionicons name="calendar-clear-outline" size={14} color={Colors.primary} />
+          <Text style={styles.calendarTriggerText}>{getFormattedCustomDateText()}</Text>
           <Ionicons name="chevron-down" size={14} color={Colors.primary} />
         </TouchableOpacity>
       </View>
@@ -169,11 +137,7 @@ export default function DateTimeSelector({
       {/* TIME SLOT GRID */}
       <View style={styles.timeSection}>
         <View style={styles.timeHeader}>
-          <Ionicons
-            name="time-outline"
-            size={16}
-            color={Colors.textSecondary}
-          />
+          <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
           <Text style={styles.timeSubTitle}>Available Time Slots</Text>
         </View>
 
@@ -226,7 +190,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: Colors.secondary,
+    color: Colors.text,
   },
 
   /* Date Strip */
@@ -245,19 +209,12 @@ const styles = StyleSheet.create({
     marginRight: 10,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    ...Shadow.light,
   },
   selectedDateCard: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Shadow.light,
     marginTop: 10,
   },
   dayNameText: {
@@ -298,7 +255,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: Colors.primary,
-    
   },
 
   /* Time Slots Area */
@@ -359,7 +315,7 @@ const styles = StyleSheet.create({
   bookedTag: {
     fontSize: 9,
     fontWeight: "700",
-    color: Colors.danger,
+    color: Colors.primary,
     marginTop: 2,
   },
 });

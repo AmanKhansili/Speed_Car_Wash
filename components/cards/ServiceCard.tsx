@@ -21,8 +21,9 @@ interface ServiceCardProps {
   rating: string;
   reviews: string;
   tag?: string;
-  image?: ImageSourcePropType; 
-  style?: StyleProp<ViewStyle>; 
+  image?: ImageSourcePropType | { uri: string };
+  style?: StyleProp<ViewStyle>;
+  onPress?: () => void; // 👈 1. Naya prop add kiya
 }
 
 export default function ServiceCard({
@@ -34,11 +35,13 @@ export default function ServiceCard({
   tag,
   image,
   style,
+  onPress,
 }: ServiceCardProps) {
   return (
-    <View style={[styles.card, style]}>
+    // 👈 2. View ko TouchableOpacity me badal diya
+    <TouchableOpacity style={[styles.card, style]} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.imageArea}>
-        {image && <Image source={image} style={styles.cardImage} resizeMode="cover" />}
+        {image && <Image source={image as any} style={styles.cardImage} resizeMode="cover" />}
         {tag && (
           <View style={styles.tagBadge}>
             <Text style={styles.tagText}>{tag}</Text>
@@ -47,23 +50,28 @@ export default function ServiceCard({
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.subtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
 
         <View style={styles.metaRow}>
           <Ionicons name="star" size={14} color={Colors.warning} />
           <Text style={styles.ratingText}>{rating}</Text>
-          <Text style={styles.reviewText}>({reviews} reviews)</Text>
+          <Text style={styles.reviewText}>({reviews})</Text>
         </View>
 
         <View style={styles.priceRow}>
           <Text style={styles.priceText}>{price}</Text>
-          <TouchableOpacity style={styles.addBtn}>
+          {/* Add button pehle se hai, wo design ke liye theek hai */}
+          <View style={styles.addBtn}>
             <Ionicons name="add" size={20} color={Colors.surface} />
-          </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

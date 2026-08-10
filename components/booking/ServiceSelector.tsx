@@ -1,7 +1,8 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import Shadow from "@/constants/shadow";
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export interface Service {
   id: string;
@@ -63,10 +64,7 @@ export default function ServiceSelector({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.85}
-              style={[
-                styles.serviceCard,
-                isSelected && styles.selectedServiceCard,
-              ]}
+              style={[styles.serviceCard, isSelected && styles.selectedServiceCard]}
               onPress={() => onSelectService(item.id)}
             >
               {/* Popular Badge */}
@@ -80,12 +78,7 @@ export default function ServiceSelector({
               <View style={styles.cardHeader}>
                 <View style={styles.titleWrapper}>
                   {/* Radio Box */}
-                  <View
-                    style={[
-                      styles.radioOuter,
-                      isSelected && styles.radioOuterSelected,
-                    ]}
-                  >
+                  <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
                     {isSelected && <View style={styles.radioInner} />}
                   </View>
 
@@ -93,11 +86,7 @@ export default function ServiceSelector({
                   <View style={styles.titleTextContainer}>
                     <Text style={styles.serviceTitle}>{item.title}</Text>
                     <View style={styles.durationChip}>
-                      <Ionicons
-                        name="time-outline"
-                        size={12}
-                        color={Colors.textSecondary}
-                      />
+                      <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
                       <Text style={styles.durationText}>{item.duration}</Text>
                     </View>
                   </View>
@@ -129,7 +118,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: Colors.secondary,
+    color: Colors.textSecondary,
   },
   listContainer: {
     gap: 12,
@@ -140,13 +129,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-    position: "relative",
-    overflow: "hidden",
+    ...Shadow.card,
   },
   selectedServiceCard: {
     borderColor: Colors.primary,

@@ -1,14 +1,8 @@
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import Shadow from "@/constants/shadow";
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 // Vehicle Type Definition
 export interface Vehicle {
@@ -93,20 +87,12 @@ export default function VehicleSelector({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.85}
-              style={[
-                styles.vehicleCard,
-                isSelected && styles.selectedVehicleCard,
-              ]}
+              style={[styles.vehicleCard, isSelected && styles.selectedVehicleCard]}
               onPress={() => onSelectVehicle(item.id)}
             >
               {/* Radio Checkbox */}
               <View style={styles.radioWrapper}>
-                <View
-                  style={[
-                    styles.radioOuter,
-                    isSelected && styles.radioOuterSelected,
-                  ]}
-                >
+                <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
                   {isSelected && <View style={styles.radioInner} />}
                 </View>
               </View>
@@ -152,7 +138,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: Colors.secondary,
+    color: Colors.textSecondary,
   },
   countBadge: {
     backgroundColor: "#E0E7FF",
@@ -193,12 +179,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    position: "relative",
+    ...Shadow.card,
   },
   selectedVehicleCard: {
     borderColor: Colors.primary,
@@ -260,7 +241,7 @@ const styles = StyleSheet.create({
   numberPlateText: {
     fontSize: 10,
     fontWeight: "700",
-    color: Colors.secondary,
+    color: Colors.text,
     letterSpacing: 0.5,
   },
 });

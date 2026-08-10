@@ -1,8 +1,9 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
-import { Address , AddressSelectorProps } from "@/types/service";
+import Shadow from "@/constants/shadow";
+import { Address, AddressSelectorProps } from "@/types/service";
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const SAVED_ADDRESSES: Address[] = [
   {
@@ -33,11 +34,7 @@ export default function AddressSelector({
         <Text style={styles.sectionTitle}>Service Location</Text>
 
         {/* Add New Address Button */}
-        <TouchableOpacity
-          style={styles.addBtn}
-          activeOpacity={0.7}
-          onPress={onAddNewAddress}
-        >
+        <TouchableOpacity style={styles.addBtn} activeOpacity={0.7} onPress={onAddNewAddress}>
           <Ionicons name="add" size={16} color={Colors.primary} />
           <Text style={styles.addBtnText}>Add New</Text>
         </TouchableOpacity>
@@ -64,10 +61,7 @@ export default function AddressSelector({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.85}
-              style={[
-                styles.addressCard,
-                isSelected && styles.selectedAddressCard,
-              ]}
+              style={[styles.addressCard, isSelected && styles.selectedAddressCard]}
               onPress={() => onSelectAddress(item.id)}
             >
               <View style={styles.cardHeader}>
@@ -78,23 +72,13 @@ export default function AddressSelector({
                     size={16}
                     color={isSelected ? Colors.primary : Colors.textSecondary}
                   />
-                  <Text
-                    style={[
-                      styles.tagText,
-                      isSelected && styles.selectedTagText,
-                    ]}
-                  >
+                  <Text style={[styles.tagText, isSelected && styles.selectedTagText]}>
                     {item.tag}
                   </Text>
                 </View>
 
                 {/* Radio Circle */}
-                <View
-                  style={[
-                    styles.radioOuter,
-                    isSelected && styles.radioOuterSelected,
-                  ]}
-                >
+                <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
                   {isSelected && <View style={styles.radioInner} />}
                 </View>
               </View>
@@ -105,11 +89,7 @@ export default function AddressSelector({
 
               {item.landmark && (
                 <View style={styles.landmarkWrapper}>
-                  <Ionicons
-                    name="navigate-outline"
-                    size={12}
-                    color={Colors.textSecondary}
-                  />
+                  <Ionicons name="navigate-outline" size={12} color={Colors.textSecondary} />
                   <Text style={styles.landmarkText}>{item.landmark}</Text>
                 </View>
               )}
@@ -125,6 +105,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     marginBottom: 24,
+    marginTop: 20,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -135,7 +116,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: Colors.secondary,
+    color: Colors.text,
   },
   addBtn: {
     flexDirection: "row",
@@ -160,10 +141,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
+    ...Shadow.card,
     elevation: 2,
   },
   selectedAddressCard: {

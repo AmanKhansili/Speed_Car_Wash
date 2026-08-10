@@ -3,81 +3,89 @@ export const servicesData = [
     id: "1",
     title: "Silver Wash",
     subtitle: "Vacuum, Shampoo & Underbody",
-    price: "₹450",
+    price: "₹400",
     rating: "4.7",
     reviews: "124",
     category: "Wash",
     image: require("@/assets/images/services/exterior.png"),
-    description: "Complete vacuuming of cars incl. seats and boot...",
+    description:
+      "Complete vacuuming (seats & boot) + Foot mats cleaning + Body shampooing & door frames + Tyre arches cleaning + Underbody wash + Engine hot water wash & dressing + Side doors cleaning + Dashboard polishing + Premium car perfume spray",
   },
   {
     id: "2",
     title: "Gold Wash",
     subtitle: "Silver Wash + Alloys & Dashboard",
-    price: "₹600",
+    price: "₹500",
     rating: "4.8",
     reviews: "89",
     category: "Wash",
     image: {
       uri: "https://www.speedcarwash.com/images/services/gold-wash.jpg",
     },
-    description: "Complete vacuuming of cars incl. seats and boot...",
+    description:
+      "Complete vacuuming of cars incl. seats and boot + Washing and cleaning of foot mats + Body Shampooing and washing including door frames + Tyre arches cleaning + Underbody wash + Engine hot water wash and dressing + Side doors cleaning + Dash board cleaning and polishing + tires and alloy wheels treatment + Car perfume spray",
   },
   {
     id: "3",
     title: "Platinum Wash",
     subtitle: "Foam Wash, Interior Dry Clean & Polish",
-    price: "₹1600",
+    price: "₹1400",
     rating: "4.9",
     reviews: "56",
     category: "Wash",
-    image: { uri: "https://img.freepik.com/free-photo/car-wash-detailing-station_1303-22307.jpg" },
-    description: "Complete dry cleaning of a interior...",
+    image: {
+      uri: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
+    },
+    description:
+      "Complete dry cleaning of a interior including seats (carpet/leather), roof, mats and boot + Complete vacuuming of cars incl. seats and boot + Washing and cleaning of foot mats + Pre washing of car + Foam cleaning of exterior + Tyre arches cleaning + Underbody wash + Engine hot water wash and dressing + Washing and cleaning of door frames + Side doors cleaning and polishing + Dash board cleaning and polishing + Tyre and alloy polishing + Scratch proof windshield spray + Car perfume spray",
   },
   {
     id: "4",
     title: "Intensive Internal",
     subtitle: "Deep Dry Clean & Vinyl Dressing",
-    price: "₹1350",
+    price: "₹1150",
     rating: "4.9",
     reviews: "42",
     category: "Interior",
     image: {
       uri: "https://www.speedcarwash.com/images/services/internal-clean.jpg",
     },
-    description: "Complete dry cleaning of a interior including seats...",
+    description:
+      "Complete dry cleaning of a interior including seats (carpet/leather), roof, mats and boot, Dressings to all vinyl, plastic, rubber giving your car spotless, shiny, glossy interior.",
   },
   {
     id: "5",
     title: "Wax Rubbing & Buffing",
     subtitle: "Scratch Repair & Paint Gloss Restore",
-    price: "₹1700",
+    price: "₹1400",
     rating: "4.8",
     reviews: "75",
     category: "Detailing",
     image: {
       uri: "https://www.speedcarwash.com/images/services/rubbing.jpg",
     },
-    description: "Over the time cars paint erodes due to the effects of sunlight...",
+    description:
+      "Over the time cars paint erodes due to the effects of sunlight, UV radiation, acid rain, salt, dirt, bird droppings and Air pollution. We give NEW LOOK TO PAINTED SURFACES by repairing the paint scratches, swirls marks, dullness, etc by using special rubbing compounds and imported polishes approved by the car manufacturers",
   },
   {
     id: "6",
     title: "Teflon Coating",
     subtitle: "PTFE Polymer Paint Protection",
-    price: "₹2800",
+    price: "₹2500",
     rating: "5.0",
     reviews: "34",
     category: "Coating",
     image: {
       uri: "https://www.speedcarwash.com/images/services/teflon-coating.jpg",
     },
-    description: "Our PTFE based Polymer paint sealant creates slippery...",
+    description:
+      "Our PTFE based Polymer paint sealant creates slippery, slick barrier that protects the paint finishes, reduces fading & oxidation of paint. It repels dirt & grime, accelerates water run-off to reduce spotting, smoothness weathered surface and removes scratches giving depth to the paint.",
   },
   {
     id: "7",
     title: "Engine Degreasing",
     subtitle: "High Gloss Coating & Rat Repellent",
-    price: "₹900",
+    price: "₹1200",
     rating: "4.8",
     reviews: "62",
     category: "Detailing",
@@ -85,13 +93,13 @@ export const servicesData = [
       uri: "https://img.freepik.com/free-photo/auto-mechanic-working-garage-repair-service_146671-19690.jpg",
     },
     description:
-      "This treatment provides a high gloss and slippery coating on to the engine parts, preventing hoses from being bitten by rats...",
+      "Petrol/Diesel+ Engine Oil + High Pressure water + Road grime + Avoids corrosion + Can be washed easily + Does not blister, crack, peel or yellow",
   },
   {
     id: "8",
     title: "A.C. Treatment",
     subtitle: "Disinfects Ducts & Removes Odors",
-    price: "₹900",
+    price: "₹1200",
     rating: "4.7",
     reviews: "84",
     category: "Interior",
@@ -99,13 +107,14 @@ export const servicesData = [
       uri: "https://www.speedcarwash.com/images/services/ac-treatment.png",
     },
     description:
-      "Designed to disinfect the Air conditioner ducts, stop buildup of mould, and improve in-car air quality...",
+      "Cleans the Air conditioner coils and ducts + Disinfects the ducts and helps to stop buildup of mould + Removes all bad and foul odors from the ducts+ Improves in-car air quality for the well being of driver and passengers",
   },
   {
     id: "9",
-    title: "Alloy Descaling",
-    subtitle: "Restores Sheen & Protects from Dust",
-    price: "₹800",
+    title: "Alloy Descaling & Tyre treatment",
+    subtitle:
+      "This treatment is designed for cleaning and protection of the alloy wheels. One of the biggest challenges being faced is in protecting alloy wheels from brake dust and grime. This, in-turn leaves spider web cracks on the alloy wheels and cannot be repaired. The beauty and sheen of the alloy wheels is lost in the process. This application is aimed at restoring the lost sheen of the alloy wheels and also ensuring long-term protection.",
+    price: "₹1100",
     rating: "4.9",
     reviews: "110",
     category: "Detailing",
@@ -113,13 +122,14 @@ export const servicesData = [
       uri: "https://www.speedcarwash.com/images/services/tyre-treatment.png",
     },
     description:
-      "Intensive cleaning and protection of alloy wheels, restoring lost sheen and ensuring long-term protection from brake dust and grime...",
+      "Grime + Only regular washing needed after Protection+ No need for expensive alloy wheel cleaners + No cracking or scaling off of the Alloy coating",
   },
   {
     id: "10",
     title: "Headlight Restore",
-    subtitle: "Clears Oxidation for Better Night Vision",
-    price: "₹700",
+    subtitle:
+      "This treatment radically improves the visibility of headlights by giving a new life to the head light cover. It clears all hard water and oxidation from the glass, thereby letting the headlights shine bright",
+    price: "₹1000",
     rating: "4.6",
     reviews: "95",
     category: "Detailing",
@@ -127,12 +137,13 @@ export const servicesData = [
       uri: "https://www.speedcarwash.com/images/services/head-light-restoration.png",
     },
     description:
-      "Radically improves headlight visibility by clearing hard water marks and oxidation from the glass for safer night driving...",
+      "Removes all dirt, dust, hard water marks from the glass + Removes the oxidation formed which clears the passage of light + Makes night driving safer",
   },
   {
     id: "11",
     title: "Upholstery Protect",
-    subtitle: "Thorough Stain Removal & Fabric Restore",
+    subtitle:
+      "In this treatment, a thorough cleaning of the fabric is carried out by a proprietary chemical. This removes the dirt, dust & grime including very tough stains like chocolates, coffee/ tea etc. The aerosol used to clean the surface dries very quickly, hence leaving no bad odors and making the interiors fresh.",
     price: "₹1500",
     rating: "4.8",
     reviews: "47",
@@ -141,13 +152,14 @@ export const servicesData = [
       uri: "https://www.speedcarwash.com/images/services/up-protection.png",
     },
     description:
-      "Removes tough stains like chocolates, coffee/tea from carpets, vinyl, fabric, and plastics, leaving interiors fresh with no odor...",
+      "Carpets + Interior Vinyl + Fabric + Plastics + Rubber surfaces + Removes all dirt and restores leather seats and side padding + Produces a true color of fabric giving a natural and rich appearance.",
   },
   {
     id: "12",
-    title: "Windshield Treat",
-    subtitle: "Clear Vision in Rain & Night Driving",
-    price: "₹1500",
+    title: "Windshield Treatment",
+    subtitle:
+      "This is for cleansing and protection of windshield of cars. With this treatment, hard water marks and oxidation are removed and a fine protective layer is formed to provide clear vision to drive during night as well as during rainy season.",
+    price: "₹2000",
     rating: "4.9",
     reviews: "132",
     category: "Coating",
@@ -155,11 +167,12 @@ export const servicesData = [
       uri: "https://www.speedcarwash.com/images/services/car-wind-sheild.png",
     },
     description:
-      "Cleans and protects windshield, removing hard water marks and oxidation to provide clear vision during rainy seasons and night...",
+      "Enhances the safety & drive-ability. + Dramatically improves all weather visibility, safety and driving comfort.",
   },
   {
     id: "13",
-    title: "Leather Condition",
+    title:
+      "In this treatment, an intensive cleansing of the leather is allotted by a proprietary chemical. This removes the dirt, mud; grime together with terribly powerful stains like chocolates, coffee/ tea etc. The aerosol accustomed clean the surface dries quickly, hence no unhealthy odors and creating the interiors recent.",
     subtitle: "Deep Clean & Condition for Rich Look",
     price: "₹1000",
     rating: "4.8",
@@ -169,7 +182,7 @@ export const servicesData = [
       uri: "https://www.speedcarwash.com/images/services/leather-coating.png",
     },
     description:
-      "Intensive cleansing and conditioning of leather interiors, removing tough stains and restoring seats with no bad odors...",
+      "Carpets + Interior Vinyl + Leather + Plastics + Rubber surfaces + Removes all dirt and restores leather seats and facet cushioning + Produces a real color of leather giving a natural and made look.",
   },
 ];
 
