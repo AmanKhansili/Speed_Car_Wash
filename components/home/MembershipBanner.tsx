@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function MembershipBanner() {
+  const router = useRouter();
   return (
     <View style={styles.container}>
       <View style={styles.content}>
@@ -14,7 +16,7 @@ export default function MembershipBanner() {
         <Text style={styles.subtitle}>
           Save up to 25% on every{"\n"}wash with exclusive benefits.
         </Text>
-        <TouchableOpacity style={styles.btn}>
+        <TouchableOpacity style={styles.btn} onPress={() => router.push("/membership")}>
           <Text style={styles.btnText}>Explore Plans</Text>
           <Ionicons name="arrow-forward" size={16} color="#FFF" style={{ marginLeft: 4 }} />
         </TouchableOpacity>
