@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  SafeAreaView,
   Platform,
   StatusBar,
 } from "react-native";
@@ -76,7 +75,6 @@ export default function SectionHeader({
   }, [isSearchOpen]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerContainer}>
         <View style={styles.topRow}>
           <TouchableOpacity
@@ -136,7 +134,6 @@ export default function SectionHeader({
           </View>
         )}
       </View>
-    </SafeAreaView>
   );
 }
 
@@ -148,6 +145,7 @@ const styles = StyleSheet.create({
   headerContainer: {
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 20,
+    paddingTop:35,
     paddingBottom: 12,
   },
   topRow: {

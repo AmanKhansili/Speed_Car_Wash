@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     marginBottom: 20,
-    // marginTop: 50,
+    marginTop: 50,
   },
   sectionHeader: {
     marginBottom: 12,
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: Colors.textSecondary,
+    // color: Colors.secondary,
   },
   listContainer: {
     gap: 12,
@@ -129,7 +129,13 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    ...Shadow.card,
+    // shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    position: "relative",
+    overflow: "hidden",
   },
   selectedServiceCard: {
     borderColor: Colors.primary,
