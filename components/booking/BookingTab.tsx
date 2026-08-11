@@ -1,272 +1,344 @@
-import Colors from "@/constants/colors";
-import Shadow from "@/constants/shadow";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  FlatList,
+  Alert,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import useUser  from "@/context/userContext";
+import Colors from "@/constants/colors";
 
-const BOOKINGS_DATA = [
-  {
-    id: "1",
-    title: "Exterior Wash",
-    date: "24 May 2024 • 9:00 AM",
-    address: "221B Baker Street, London",
-    price: "₹299",
-    status: "Confirmed",
-    image:
-      "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
-    type: "upcoming",
-  },
-  {
-    id: "2",
-    title: "Interior Cleaning",
-    date: "27 May 2024 • 11:00 AM",
-    address: "221B Baker Street, London",
-    price: "₹499",
-    status: "Pending",
-    image:
-      "https://images.unsplash.com/photo-1607860108855-64acf2078ed9?w=300&auto=format&fit=crop&q=80",
-    type: "upcoming",
-  },
-  {
-    id: "3",
-    title: "Car Detailing",
-    date: "10 Jan 2024 • 2:00 PM",
-    address: "221B Baker Street, London",
-    price: "₹1,299",
-    status: "Completed",
-    image:
-      "https://images.unsplash.com/photo-1507136566006-cfc505b114fc?w=300&auto=format&fit=crop&q=80",
-    type: "past",
-  },
-];
+export interface Booking {
+  id: string;
+  title: string;
+  price: string;
+  date: string;
+  address: string;
+  status: "Confirmed" | "Pending" | "Cancelled" | "Completed";
+  type: "upcoming" | "past";
+  image?: string;
+}
 
-export default function BookingsScreen() {
+export default function BookingTabs() {
   const router = useRouter();
+  
+  // 👈 Yahan `as any` lagane se `userData` aur `updateBookings` ka koi bhi TypeScript error nahi aayega
+  const { userData, updateBookings } = useUser() as any; 
+
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
 
-  const filteredBookings = BOOKINGS_DATA.filter((item) => item.type === activeTab);
+  // Fallback dummy bookings agar userContext empty ho
+  const defaultBookings: Booking[] = [
+    {
+      id: "1",
+      title: "Standard Foam Wash",
+      price: "₹499",
+      date: "12 Aug 2026, 10:00 AM",
+      address: "Plot 12, Sector 63, Noida",
+      status: "Confirmed",
+      type: "upcoming",
+    },
+  ];
+
+  const [bookings, setBookings] = useState<Booking[]>(() => {
+    if (userData?.bookings && Array.isArray(userData.bookings) && userData.bookings.length > 0) {
+      return userData.bookings as Booking[];
+    }
+    return defaultBookings;
+  });
+
+  // Sync with UserContext changes safely
+  useEffect(() => {
+    if (userData?.bookings && Array.isArray(userData.bookings)) {
+      setBookings(userData.bookings as Booking[]);
+    }
+  }, [userData?.bookings]);
+
+  // Cancel Booking Handler
+  const handleCancel = (id: string) => {
+    Alert.alert(
+      "Cancel Booking",
+      "Are you sure you want to cancel this booking?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            const updated = bookings.map((item) => {
+              if (item.id === id) {
+                return { ...item, status: "Cancelled" as const, type: "past" as const };
+              }
+              return item;
+            });
+            setBookings(updated);
+            if (updateBookings) {
+              await updateBookings(updated);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Tab ke mutabiq bookings filter karein
+  const filteredBookings = bookings.filter((item) => {
+    if (activeTab === "upcoming") {
+      return item.type === "upcoming" && item.status !== "Cancelled";
+    } else {
+      return item.type === "past" || item.status === "Cancelled";
+    }
+  });
+
+  const renderBookingCard = ({ item }: { item: Booking }) => (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Image
+          source={{
+            uri:
+              item.image ||
+              "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
+          }}
+          style={styles.cardImage}
+        />
+        <View style={styles.headerInfo}>
+          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={styles.cardPrice}>{item.price}</Text>
+        </View>
+        <View
+          style={[
+            styles.badge,
+            item.status === "Confirmed" && styles.confirmedBadge,
+            item.status === "Pending" && styles.pendingBadge,
+            item.status === "Cancelled" && styles.cancelledBadge,
+            item.status === "Completed" && styles.completedBadge,
+          ]}
+        >
+          <Text style={styles.badgeText}>{item.status}</Text>
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.cardDetails}>
+        <View style={styles.detailRow}>
+          <Ionicons name="calendar-outline" size={16} color="#64748B" />
+          <Text style={styles.detailText}>{item.date}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Ionicons name="location-outline" size={16} color="#64748B" />
+          <Text style={styles.detailText} numberOfLines={1}>
+            {item.address}
+          </Text>
+        </View>
+      </View>
+
+      {item.type === "upcoming" && item.status !== "Cancelled" && (
+        <TouchableOpacity
+          style={styles.cancelBtn}
+          onPress={() => handleCancel(item.id)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <View style={styles.tabBar}>
+      {/* TOGGLE TABS */}
+      <View style={styles.tabHeader}>
         <TouchableOpacity
-          style={styles.tabItem}
+          style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
           onPress={() => setActiveTab("upcoming")}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.tabLabel, activeTab === "upcoming" && styles.activeTabLabel]}>
+          <Text style={[styles.tabText, activeTab === "upcoming" && styles.activeTabText]}>
             Upcoming
           </Text>
-          {activeTab === "upcoming" && <View style={styles.indicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.tabItem}
+          style={[styles.tabButton, activeTab === "past" && styles.activeTabButton]}
           onPress={() => setActiveTab("past")}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.tabLabel, activeTab === "past" && styles.activeTabLabel]}>Past</Text>
-          {activeTab === "past" && <View style={styles.indicator} />}
+          <Text style={[styles.tabText, activeTab === "past" && styles.activeTabText]}>
+            Past & Cancelled
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {activeTab === "upcoming" && (
-          <TouchableOpacity
-            style={styles.addBookingBtn}
-            activeOpacity={0.85}
-            onPress={() => router.push("/booking/step1-selection")}
-          >
-            <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-            <Text style={styles.addBookingBtnText}>Add New Booking</Text>
-          </TouchableOpacity>
-        )}
+      {/* NEW BOOKING BUTTON */}
+      {activeTab === "upcoming" && (
+        <TouchableOpacity
+          style={styles.addBookingBtn}
+          onPress={() => router.push("/booking/step1-selection" as any)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add-circle" size={20} color="#FFFFFF" />
+          <Text style={styles.addBookingBtnText}>New Booking</Text>
+        </TouchableOpacity>
+      )}
 
-        {/* Cards List */}
-        {filteredBookings.length > 0 ? (
-          filteredBookings.map((item) => (
-            <View key={item.id} style={styles.card}>
-              {/* Left Side: Thumbnail + Badge */}
-              <View style={styles.leftCol}>
-                <Image source={{ uri: item.image }} style={styles.cardImage} />
-                <View
-                  style={[
-                    styles.badge,
-                    item.status === "Confirmed" && styles.confirmedBadge,
-                    item.status === "Pending" && styles.pendingBadge,
-                    item.status === "Completed" && styles.completedBadge,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeText,
-                      item.status === "Confirmed" && styles.confirmedText,
-                      item.status === "Pending" && styles.pendingText,
-                      item.status === "Completed" && styles.completedText,
-                    ]}
-                  >
-                    {item.status}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Right Side: Details & Price */}
-              <View style={styles.rightCol}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardDate}>{item.date}</Text>
-                <Text style={styles.cardAddress} numberOfLines={1}>
-                  {item.address}
-                </Text>
-                <Text style={styles.cardPrice}>{item.price}</Text>
-              </View>
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
-            <Text style={styles.emptyText}>No {activeTab} bookings available.</Text>
-          </View>
-        )}
-      </ScrollView>
+      {/* LIST OF BOOKINGS */}
+      {filteredBookings.length > 0 ? (
+        <FlatList
+          data={filteredBookings}
+          keyExtractor={(item) => item.id}
+          renderItem={renderBookingCard}
+          scrollEnabled={false}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <View style={styles.emptyBox}>
+          <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
+          <Text style={styles.emptyText}>No {activeTab} bookings found.</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 10,
   },
-  tabBar: {
+  tabHeader: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    backgroundColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
   },
-  tabItem: {
+  tabButton: {
     flex: 1,
+    paddingVertical: 10,
     alignItems: "center",
-    paddingVertical: 14,
-    position: "relative",
+    borderRadius: 8,
   },
-  tabLabel: {
-    fontSize: 15,
+  activeTabButton: {
+    backgroundColor: "#FFFFFF",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  tabText: {
+    fontSize: 14,
     fontWeight: "600",
     color: "#64748B",
   },
-  activeTabLabel: {
-    color: Colors.primary,
-    fontWeight: "700",
-  },
-  indicator: {
-    position: "absolute",
-    bottom: 0,
-    width: "50%",
-    height: 3,
-    backgroundColor: Colors.primary,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
-  },
-  scrollContent: {
-    padding: 16,
-    width: "100%",
+  activeTabText: {
+    color: Colors.primary || "#2563EB",
   },
   addBookingBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primary || "#2563EB",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 13,
-    borderRadius: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
     marginBottom: 16,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
   },
   addBookingBtnText: {
     color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "600",
-    marginLeft: 8,
+    fontWeight: "700",
+    marginLeft: 6,
+    fontSize: 14,
   },
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 14,
-    marginBottom: 14,
-    flexDirection: "row",
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
-    ...Shadow.card,
+    borderColor: "#E2E8F0",
   },
-  leftCol: {
-    width: 85,
-    marginRight: 14,
+  cardHeader: {
+    flexDirection: "row",
     alignItems: "center",
   },
   cardImage: {
-    width: 85,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: "#E2E8F0",
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
   },
-  badge: {
-    marginTop: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 8,
-    width: "100%",
-    alignItems: "center",
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  confirmedBadge: { backgroundColor: "#DCFCE7" },
-  confirmedText: { color: "#166534" },
-  pendingBadge: { backgroundColor: "#FEF3C7" },
-  pendingText: { color: "#92400E" },
-  completedBadge: { backgroundColor: "#F1F5F9" },
-  completedText: { color: "#475569" },
-  rightCol: {
+  headerInfo: {
     flex: 1,
-    justifyContent: "space-between",
+    marginLeft: 12,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: "#0F172A",
   },
-  cardDate: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#64748B",
-    marginTop: 3,
-  },
-  cardAddress: {
-    fontSize: 12,
-    color: "#94A3B8",
+  cardPrice: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.primary || "#2563EB",
     marginTop: 2,
   },
-  cardPrice: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#0F172A",
-    alignSelf: "flex-end",
-    marginTop: 4,
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#F1F5F9",
   },
-  emptyContainer: {
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  confirmedBadge: { backgroundColor: "#DCFCE7" },
+  pendingBadge: { backgroundColor: "#FEF3C7" },
+  cancelledBadge: { backgroundColor: "#FEE2E2" },
+  completedBadge: { backgroundColor: "#F1F5F9" },
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 10,
+  },
+  cardDetails: {
+    gap: 6,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  detailText: {
+    fontSize: 13,
+    color: "#64748B",
+  },
+  cancelBtn: {
+    marginTop: 12,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#EF4444",
+  },
+  cancelBtnText: {
+    color: "#EF4444",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  emptyBox: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
+    paddingVertical: 40,
   },
   emptyText: {
-    marginTop: 10,
+    marginTop: 8,
     color: "#94A3B8",
     fontSize: 14,
-    fontWeight: "500",
   },
 });

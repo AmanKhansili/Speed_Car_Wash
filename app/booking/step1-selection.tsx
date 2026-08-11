@@ -1,51 +1,72 @@
-import React, { useState } from "react";
-import { View, StyleSheet, ScrollView, TouchableOpacity, Text, Alert } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, ScrollView, StyleSheet, Alert, Text, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
-import { useBooking } from "@/context/BookingContext";
-
-// AAPKE COMPONENTS (Sahi path ke mutabiq import karein)
+import  useUser  from "@/context/userContext"; 
 import VehicleSelector from "@/components/booking/VehicleSelector";
 import ServiceSelector from "@/components/booking/ServiceSelector";
 import Colors from "@/constants/colors";
 
 export default function Step1SelectionScreen() {
   const router = useRouter();
-  const { bookingData, updateBooking } = useBooking();
+  const { userData, selectVehicle } = useUser();
 
-  const [selectedVehicle, setSelectedVehicle] = useState(bookingData.vehicleId || "");
-  const [selectedService, setSelectedService] = useState(bookingData.serviceId || "");
+  const [selectedVehicle, setSelectedVehicle] = useState<string>(
+    userData.selectedVehicleId || (userData.vehicles?.[0]?.id || "")
+  );
+  const [selectedService, setSelectedService] = useState<string>("");
+
+  useEffect(() => {
+    if (!selectedVehicle && userData.vehicles.length > 0) {
+      setSelectedVehicle(userData.vehicles[0].id);
+    }
+  }, [userData.vehicles]);
+
+  const handleVehicleSelect = (id: string) => {
+    setSelectedVehicle(id);
+    selectVehicle(id); 
+  };
 
   const handleContinue = () => {
     if (!selectedVehicle || !selectedService) {
-      Alert.alert("Selection Required", "Please select both a vehicle and a service package.");
+      Alert.alert(
+        "Selection Required",
+        "Please select both a vehicle and a service package to proceed."
+      );
       return;
     }
-
-    // Save to global state & go to Next Screen
-    updateBooking({ vehicleId: selectedVehicle, serviceId: selectedService });
-    router.push("/booking/step2-datetime");
+    router.push({
+      pathname: "/booking/step2-datetime",
+      params: { vehicleId: selectedVehicle, serviceId: selectedService },
+    });
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* AAPKA VEHICLE COMPONENT */}
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <VehicleSelector
           selectedVehicleId={selectedVehicle}
-          onSelectVehicle={setSelectedVehicle}
+          onSelectVehicle={handleVehicleSelect}
         />
 
-        {/* AAPKA SERVICE COMPONENT */}
         <ServiceSelector
           selectedServiceId={selectedService}
           onSelectService={setSelectedService}
         />
       </ScrollView>
 
-      {/* STICKY BOTTOM BUTTON */}
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
-          <Text style={styles.btnText}>Continue to Date & Time</Text>
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={[
+            styles.continueBtn,
+            (!selectedVehicle || !selectedService) && styles.disabledBtn,
+          ]}
+          onPress={handleContinue}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.continueBtnText}>Continue to Date & Time</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -53,23 +74,43 @@ export default function Step1SelectionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFF",paddingTop: 20, },
-  scrollContent: { paddingBottom: 100 },
-  footer: {
+  container: { 
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+  scrollContent: { 
+    padding: 16,
+    paddingBottom: 100,
+  },
+  bottomBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderTopWidth: 1,
-    borderColor: Colors.border || "#E5E7EB",
+    borderTopColor: "#E2E8F0",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
   },
   continueBtn: {
     backgroundColor: Colors.primary || "#2563EB",
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
   },
-  btnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+  disabledBtn: {
+    backgroundColor: "#94A3B8",
+  },
+  continueBtnText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
 });

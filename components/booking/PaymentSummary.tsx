@@ -1,14 +1,9 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import Shadow from "@/constants/shadow";
 import { PaymentSummaryProps } from "@/types/service";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function PaymentSummary({
   bookingData,
@@ -57,10 +52,7 @@ export default function PaymentSummary({
     setCouponApplied(false);
   };
 
-  const grandTotal = Math.max(
-    0,
-    basePrice + taxes + convenienceFee - appliedDiscount,
-  );
+  const grandTotal = Math.max(0, basePrice + taxes + convenienceFee - appliedDiscount);
 
   return (
     <View style={styles.container}>
@@ -71,11 +63,7 @@ export default function PaymentSummary({
 
           {bookingData.serviceTitle && (
             <View style={styles.overviewRow}>
-              <Ionicons
-                name="car-sport-outline"
-                size={16}
-                color={Colors.primary}
-              />
+              <Ionicons name="car-sport-outline" size={16} color={Colors.primary} />
               <Text style={styles.overviewText}>
                 {bookingData.serviceTitle}{" "}
                 {bookingData.vehicleName ? `(${bookingData.vehicleName})` : ""}
@@ -85,25 +73,16 @@ export default function PaymentSummary({
 
           {(bookingData.date || bookingData.time) && (
             <View style={styles.overviewRow}>
-              <Ionicons
-                name="calendar-outline"
-                size={16}
-                color={Colors.primary}
-              />
+              <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
               <Text style={styles.overviewText}>
-                {bookingData.date || "Selected Date"} at{" "}
-                {bookingData.time || "Selected Slot"}
+                {bookingData.date || "Selected Date"} at {bookingData.time || "Selected Slot"}
               </Text>
             </View>
           )}
 
           {bookingData.address && (
             <View style={styles.overviewRow}>
-              <Ionicons
-                name="location-outline"
-                size={16}
-                color={Colors.primary}
-              />
+              <Ionicons name="location-outline" size={16} color={Colors.primary} />
               <Text style={styles.overviewText} numberOfLines={1}>
                 {bookingData.addressText}
               </Text>
@@ -120,11 +99,7 @@ export default function PaymentSummary({
       <View style={styles.couponCard}>
         {!couponApplied ? (
           <View style={styles.couponInputWrapper}>
-            <Ionicons
-              name="pricetag-outline"
-              size={18}
-              color={Colors.primary}
-            />
+            <Ionicons name="pricetag-outline" size={18} color={Colors.primary} />
             <TextInput
               style={styles.couponInput}
               placeholder="Enter Promo Code (Try FIRST100)"
@@ -134,10 +109,7 @@ export default function PaymentSummary({
               autoCapitalize="characters"
             />
             <TouchableOpacity
-              style={[
-                styles.applyBtn,
-                !couponCode.trim() && styles.disabledApplyBtn,
-              ]}
+              style={[styles.applyBtn, !couponCode.trim() && styles.disabledApplyBtn]}
               disabled={!couponCode.trim()}
               onPress={handleApplyCoupon}
               activeOpacity={0.8}
@@ -192,9 +164,7 @@ export default function PaymentSummary({
           <View>
             <Text style={styles.totalLabel}>Total Amount</Text>
             {appliedDiscount > 0 && (
-              <Text style={styles.savingsTag}>
-                You saved ₹{appliedDiscount} on this order
-              </Text>
+              <Text style={styles.savingsTag}>You saved ₹{appliedDiscount} on this order</Text>
             )}
           </View>
           <Text style={styles.totalValue}>₹{grandTotal}</Text>
@@ -203,14 +173,8 @@ export default function PaymentSummary({
 
       {/* 4. Trust & Safety Banner */}
       <View style={styles.trustBanner}>
-        <Ionicons
-          name="shield-checkmark-outline"
-          size={16}
-          color={Colors.primary}
-        />
-        <Text style={styles.trustText}>
-          Safe & Secure Payments • 100% Satisfaction Guarantee
-        </Text>
+        <Ionicons name="shield-checkmark-outline" size={16} color={Colors.primary} />
+        <Text style={styles.trustText}>Safe & Secure Payments • 100% Satisfaction Guarantee</Text>
       </View>
     </View>
   );
@@ -233,7 +197,7 @@ const styles = StyleSheet.create({
   overviewTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: Colors.secondary,
+    color: Colors.textSecondary,
   },
   overviewDivider: {
     height: 1,
@@ -259,7 +223,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: Colors.secondary,
+    color: Colors.text,
   },
 
   /* Coupon Box */
@@ -322,11 +286,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    ...Shadow.light,
   },
   row: {
     flexDirection: "row",

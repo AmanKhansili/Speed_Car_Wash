@@ -19,6 +19,7 @@ import SearchBar from "@/components/common/SearchBar";
 
 // NAYA DATA IMPORT HERE
 import { categoriesList, servicesData } from "@/constants/data";
+import { router } from "expo-router";
 
 const { width } = Dimensions.get("window");
 const cardWidth = (width - 48) / 2;
@@ -85,6 +86,7 @@ export default function ServicesScreen() {
             reviews={item.reviews}
             image={item.image}
             style={{ width: cardWidth, marginBottom: 16 }}
+            onPress={() => router.push(`/services/${item.id}` as any)}
           />
         )}
         ListEmptyComponent={() => (

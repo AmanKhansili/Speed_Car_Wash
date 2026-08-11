@@ -7,359 +7,212 @@ import {
   TouchableOpacity,
   Platform,
 } from "react-native";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
 import Colors from "@/constants/colors";
-
-const getNextDays = (daysCount = 14) => {
-  const days = [];
-  const today = new Date();
-
-  for (let i = 0; i < daysCount; i++) {
-    const d = new Date();
-    d.setDate(today.getDate() + i);
-
-    const dayName = d
-      .toLocaleDateString("en-US", { weekday: "short" })
-      .toUpperCase();
-    const dateNum = d.getDate().toString().padStart(2, "0");
-    const fullDate = d.toISOString().split("T")[0];
-
-    days.push({
-      id: fullDate,
-      dayName: i === 0 ? "TODAY" : dayName,
-      dateNum,
-      rawDate: d,
-    });
-  }
-  return days;
-};
-
-// Time Slots Data
-const TIME_SLOTS = [
-  { id: "t1", time: "09:00 AM", isAvailable: true },
-  { id: "t2", time: "10:30 AM", isAvailable: true },
-  { id: "t3", time: "12:00 PM", isAvailable: false },
-  { id: "t4", time: "02:00 PM", isAvailable: true },
-  { id: "t5", time: "03:30 PM", isAvailable: true },
-  { id: "t6", time: "05:00 PM", isAvailable: true },
-  { id: "t7", time: "06:30 PM", isAvailable: true },
-];
+import Shadow from "@/constants/shadow";
 
 interface DateTimeSelectorProps {
   selectedDate: string; // YYYY-MM-DD
-  selectedTimeSlot: string;
   onSelectDate: (date: string) => void;
-  onSelectTimeSlot: (time: string) => void;
 }
+
+// 🟢 Timezone-safe Helper: Date Object -> YYYY-MM-DD
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+// 🟢 Timezone-safe Helper: YYYY-MM-DD -> Local Date Object
+const parseLocalDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+// Next 14 days calendar dates generator
+const generateCalendarDates = () => {
+  const dates = [];
+  const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+
+  const today = new Date();
+
+  for (let i = 0; i < 14; i++) {
+    const d = new Date();
+    d.setDate(today.getDate() + i);
+
+    const dayName = daysOfWeek[d.getDay()];
+    const dateNum = d.getDate();
+    const monthName = months[d.getMonth()];
+    const fullDateString = formatLocalDate(d); // ✅ Timezone Safe
+
+    dates.push({
+      dayName: i === 0 ? "Today" : dayName,
+      dateNum,
+      monthName,
+      fullDate: fullDateString,
+    });
+  }
+
+  return dates;
+};
 
 export default function DateTimeSelector({
   selectedDate,
-  selectedTimeSlot,
   onSelectDate,
-  onSelectTimeSlot,
 }: DateTimeSelectorProps) {
-  const dateList = getNextDays(14);
-  const activeDate = selectedDate || dateList[0].id;
-
+  const calendarDates = generateCalendarDates();
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [calendarDate, setCalendarDate] = useState(new Date());
 
-  // Handle Native Calendar Selection
-  const handleCalendarChange = (
-    event: DateTimePickerEvent,
-    date?: Date
-  ) => {
+  // Date Change Handler
+  const handleNativeDateChange = (event: DateTimePickerEvent, date?: Date) => {
     setShowDatePicker(Platform.OS === "ios");
-    if (date) {
-      setCalendarDate(date);
-      const formattedDate = date.toISOString().split("T")[0];
+    
+    if (event.type !== "dismissed" && date) {
+      const formattedDate = formatLocalDate(date); // ✅ Timezone Safe
       onSelectDate(formattedDate);
     }
   };
 
-  // Display text for custom date button
-  const getFormattedCustomDateText = () => {
-    const isCustomDateInStrip = dateList.some((d) => d.id === activeDate);
-    if (!isCustomDateInStrip && selectedDate) {
-      return `Selected: ${selectedDate}`;
-    }
-    return "More Dates (Open Calendar)";
-  };
-
   return (
     <View style={styles.container}>
-      {/* SECTION HEADER */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Select Date & Time</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.sectionTitle}>📅 Select Date</Text>
+
+        <TouchableOpacity
+          style={styles.calendarPickerBtn}
+          onPress={() => setShowDatePicker(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="calendar-outline" size={18} color={Colors.primary || "#2563EB"} />
+          <Text style={styles.calendarPickerText}>Custom Date</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* HORIZONTAL DATE STRIP */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.dateStripContent}
+        contentContainerStyle={styles.calendarContainer}
       >
-        {dateList.map((item) => {
-          const isSelected = item.id === activeDate;
+        {calendarDates.map((item) => {
+          const isSelected = item.fullDate === selectedDate;
 
           return (
             <TouchableOpacity
-              key={item.id}
+              key={item.fullDate}
               activeOpacity={0.8}
               style={[
                 styles.dateCard,
                 isSelected && styles.selectedDateCard,
               ]}
-              onPress={() => onSelectDate(item.id)}
+              onPress={() => onSelectDate(item.fullDate)}
             >
-              <Text
-                style={[
-                  styles.dayNameText,
-                  isSelected && styles.selectedDayNameText,
-                ]}
-              >
+              <Text style={[styles.dayText, isSelected && styles.selectedText]}>
                 {item.dayName}
               </Text>
-              <Text
-                style={[
-                  styles.dateNumText,
-                  isSelected && styles.selectedDateNumText,
-                ]}
-              >
+              <Text style={[styles.dateNumText, isSelected && styles.selectedText]}>
                 {item.dateNum}
+              </Text>
+              <Text style={[styles.monthText, isSelected && styles.selectedText]}>
+                {item.monthName}
               </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      {/* SMALL CALENDAR OPENER BUTTON BELOW DATES */}
-      <View style={styles.calendarTriggerWrapper}>
-        <TouchableOpacity
-          style={styles.calendarTriggerBtn}
-          activeOpacity={0.7}
-          onPress={() => setShowDatePicker(true)}
-        >
-          <Ionicons
-            name="calendar-clear-outline"
-            size={14}
-            color={Colors.primary}
-          />
-          <Text style={styles.calendarTriggerText}>
-            {getFormattedCustomDateText()}
-          </Text>
-          <Ionicons name="chevron-down" size={14} color={Colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* NATIVE DATE PICKER DIALOG */}
       {showDatePicker && (
         <DateTimePicker
-          value={calendarDate}
+          value={selectedDate ? parseLocalDate(selectedDate) : new Date()} // ✅ Safe Parsing
           mode="date"
-          display="default"
+          display={Platform.OS === "ios" ? "inline" : "default"}
           minimumDate={new Date()}
-          onChange={handleCalendarChange}
+          onChange={handleNativeDateChange}
         />
       )}
-
-      {/* TIME SLOT GRID */}
-      <View style={styles.timeSection}>
-        <View style={styles.timeHeader}>
-          <Ionicons
-            name="time-outline"
-            size={16}
-            color={Colors.textSecondary}
-          />
-          <Text style={styles.timeSubTitle}>Available Time Slots</Text>
-        </View>
-
-        <View style={styles.slotsGrid}>
-          {TIME_SLOTS.map((slot) => {
-            const isSelected = slot.time === selectedTimeSlot;
-            const isDisabled = !slot.isAvailable;
-
-            return (
-              <TouchableOpacity
-                key={slot.id}
-                disabled={isDisabled}
-                activeOpacity={0.8}
-                style={[
-                  styles.timeChip,
-                  isSelected && styles.selectedTimeChip,
-                  isDisabled && styles.disabledTimeChip,
-                ]}
-                onPress={() => onSelectTimeSlot(slot.time)}
-              >
-                <Text
-                  style={[
-                    styles.timeText,
-                    isSelected && styles.selectedTimeText,
-                    isDisabled && styles.disabledTimeText,
-                  ]}
-                >
-                  {slot.time}
-                </Text>
-
-                {isDisabled && <Text style={styles.bookedTag}>Booked</Text>}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 24,
-    marginTop: 30,
-  },
-  sectionHeader: {
     paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
-    color: Colors.secondary,
+    color: Colors.secondary || "#111827",
   },
-
-  /* Date Strip */
-  dateStripContent: {
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 4,
+  calendarPickerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  calendarPickerText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.primary || "#2563EB",
+  },
+  calendarContainer: {
+    gap: 10,
+    paddingRight: 16,
   },
   dateCard: {
-    width: 62,
-    height: 74,
-    backgroundColor: Colors.surface,
+    width: 68,
+    paddingVertical: 14,
     borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.border || "#E5E7EB",
+    backgroundColor: Colors.surface || "#F9FAFB",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
   },
   selectedDateCard: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-    shadowColor: Colors.primary,
+    borderColor: Colors.primary || "#2563EB",
+    backgroundColor: Colors.primary || "#2563EB",
+    elevation: 3,
+    shadowColor: Colors.primary || "#2563EB",
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-    marginTop: 10,
+    shadowRadius: 4,
   },
-  dayNameText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: Colors.textSecondary,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  selectedDayNameText: {
-    color: "#93C5FD",
+  dayText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.textSecondary || "#6B7280",
+    marginBottom: 2,
   },
   dateNumText: {
     fontSize: 18,
     fontWeight: "800",
-    color: Colors.text,
+    color: Colors.text || "#111827",
   },
-  selectedDateNumText: {
-    color: "#FFFFFF",
-  },
-
-  /* Small Calendar Trigger Button */
-  calendarTriggerWrapper: {
-    paddingHorizontal: 16,
-    marginTop: 10,
-    alignItems: "flex-start",
-  },
-  calendarTriggerBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-  },
-  calendarTriggerText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: Colors.primary,
-    
-  },
-
-  /* Time Slots Area */
-  timeSection: {
-    paddingHorizontal: 16,
-    marginTop: 40,
-  },
-  timeHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  timeSubTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: Colors.textSecondary,
-    marginLeft: 6,
-  },
-  slotsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  timeChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: "30%",
-    flexGrow: 1,
-  },
-  selectedTimeChip: {
-    borderColor: Colors.primary,
-    backgroundColor: "#F0F5FF",
-  },
-  disabledTimeChip: {
-    backgroundColor: "#F1F5F9",
-    borderColor: "#E2E8F0",
-    opacity: 0.7,
-  },
-  timeText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: Colors.text,
-  },
-  selectedTimeText: {
-    color: Colors.primary,
-    fontWeight: "700",
-  },
-  disabledTimeText: {
-    color: "#94A3B8",
-    textDecorationLine: "line-through",
-  },
-  bookedTag: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: Colors.danger,
+  monthText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: Colors.textSecondary || "#6B7280",
     marginTop: 2,
+  },
+  selectedText: {
+    color: "#FFFFFF",
   },
 });
