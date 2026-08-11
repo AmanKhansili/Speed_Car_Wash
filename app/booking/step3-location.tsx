@@ -8,9 +8,9 @@ import {
   TextInput,
   Alert,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router"; // 👈 Added useLocalSearchParams
+import { useRouter, useLocalSearchParams } from "expo-router"; 
 import { Ionicons } from "@expo/vector-icons";
-import { useUser } from "@/context/userContext"; // 👈 Integrated useUser
+import  useUser  from "@/context/userContext"; 
 import AddressSelector from "@/components/booking/AddressSelector";
 import Colors from "@/constants/colors";
 
@@ -18,24 +18,20 @@ export default function Step3LocationScreen() {
   const router = useRouter();
   const { userData, updatePhone } = useUser();
 
-  // 1. Receive previous step parameters (vehicleId, serviceId, date)
   const params = useLocalSearchParams<{
     vehicleId?: string;
     serviceId?: string;
     date?: string;
   }>();
 
-  // 2. Service Type State ("pickup" | "walkin")
   const [serviceType, setServiceType] = useState<"pickup" | "walkin">("pickup");
 
   // 3. Selected Address State
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [addressText, setAddressText] = useState<string>("");
 
-  // 4. Mobile Number State (Pre-filled from UserContext)
   const [phone, setPhone] = useState<string>(userData.mobileNumber || "");
 
-  // UserContext se phone update auto-sync karein agar pehle se saved ho
   useEffect(() => {
     if (userData.mobileNumber && !phone) {
       setPhone(userData.mobileNumber);
@@ -43,13 +39,11 @@ export default function Step3LocationScreen() {
   }, [userData.mobileNumber]);
 
   const handleContinue = async () => {
-    // Mobile Number Validation
     if (!phone || phone.trim().length !== 10) {
       Alert.alert("Invalid Phone", "Please enter a valid 10-digit mobile number.");
       return;
     }
 
-    // Address Validation (Pickup mode ke liye mandatory hai)
     let fullAddressText = "Walk-in at Workshop Center";
     if (serviceType === "pickup") {
       if (!selectedAddressId) {
@@ -59,7 +53,6 @@ export default function Step3LocationScreen() {
       fullAddressText = addressText || "Selected Pickup Address";
     }
 
-    // Optionally save/update phone in User Context & Local Storage
     try {
       if (phone !== userData.mobileNumber) {
         await updatePhone(phone);
@@ -68,7 +61,6 @@ export default function Step3LocationScreen() {
       console.log("Error updating phone:", e);
     }
 
-    // Summary Screen Navigate karein saara combined booking data params me bhej kar
     router.push({
       pathname: "/booking/summary",
       params: {
@@ -88,7 +80,6 @@ export default function Step3LocationScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Service Type Selector (Pickup vs Walk-in) */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Select Service Type</Text>
           <View style={styles.toggleWrapper}>
@@ -148,7 +139,6 @@ export default function Step3LocationScreen() {
           </View>
         </View>
 
-        {/* Address Selection - Conditional (Only when Pickup is active) */}
         {serviceType === "pickup" ? (
           <AddressSelector
             selectedAddressId={selectedAddressId}
@@ -173,7 +163,6 @@ export default function Step3LocationScreen() {
           </View>
         )}
 
-        {/* Mobile Number Input Section */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Contact Mobile Number</Text>
           <Text style={styles.sectionSub}>
@@ -197,7 +186,6 @@ export default function Step3LocationScreen() {
         </View>
       </ScrollView>
 
-      {/* Footer Submit Button */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.continueBtn}
@@ -228,7 +216,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  /* Toggle Switch Styles */
   toggleWrapper: {
     flexDirection: "row",
     backgroundColor: "#F3F4F6",
@@ -260,7 +247,6 @@ const styles = StyleSheet.create({
   },
   toggleTextActive: { color: "#FFF" },
 
-  /* Walkin Card Styles */
   walkinCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -284,7 +270,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  /* Phone Input Styles */
   phoneInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -315,7 +300,6 @@ const styles = StyleSheet.create({
     color: Colors.text || "#111827",
   },
 
-  /* Footer Button */
   footer: {
     position: "absolute",
     bottom: 0,

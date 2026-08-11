@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, ScrollView, StyleSheet, Alert, Text, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
-import { useUser } from "@/context/userContext"; // 👈 Integrated useUser
+import  useUser  from "@/context/userContext"; 
 import VehicleSelector from "@/components/booking/VehicleSelector";
 import ServiceSelector from "@/components/booking/ServiceSelector";
 import Colors from "@/constants/colors";
@@ -10,13 +10,11 @@ export default function Step1SelectionScreen() {
   const router = useRouter();
   const { userData, selectVehicle } = useUser();
 
-  // UserContext se initial selected vehicle ID auto-pick karein
   const [selectedVehicle, setSelectedVehicle] = useState<string>(
     userData.selectedVehicleId || (userData.vehicles?.[0]?.id || "")
   );
   const [selectedService, setSelectedService] = useState<string>("");
 
-  // Agar user background me nayi car add kar raha ho toh local state sync rakhein
   useEffect(() => {
     if (!selectedVehicle && userData.vehicles.length > 0) {
       setSelectedVehicle(userData.vehicles[0].id);
@@ -25,7 +23,7 @@ export default function Step1SelectionScreen() {
 
   const handleVehicleSelect = (id: string) => {
     setSelectedVehicle(id);
-    selectVehicle(id); // Context level user default vehicle set kar dega
+    selectVehicle(id); 
   };
 
   const handleContinue = () => {
@@ -36,8 +34,6 @@ export default function Step1SelectionScreen() {
       );
       return;
     }
-
-    // Step 2 me router params ke zariye data carry over kar rahe hain
     router.push({
       pathname: "/booking/step2-datetime",
       params: { vehicleId: selectedVehicle, serviceId: selectedService },
@@ -50,20 +46,17 @@ export default function Step1SelectionScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Vehicle Selection Section */}
         <VehicleSelector
           selectedVehicleId={selectedVehicle}
           onSelectVehicle={handleVehicleSelect}
         />
 
-        {/* Service Package Selection Section */}
         <ServiceSelector
           selectedServiceId={selectedService}
           onSelectService={setSelectedService}
         />
       </ScrollView>
 
-      {/* Sticky Bottom Action Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={[
@@ -87,7 +80,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: { 
     padding: 16,
-    paddingBottom: 100, // Bottom bar space
+    paddingBottom: 100,
   },
   bottomBar: {
     position: "absolute",

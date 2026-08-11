@@ -133,8 +133,8 @@ export const UserProvider = ({ children, userId }: UserProviderProps) => {
   );
 };
 
-// 5. Custom Hook to consume context
-export const useUser = (): UserContextType => {
+
+export default function useUser(): UserContextType{
   const context = useContext(UserContext);
   if (!context) {
     throw new Error("useUser must be used within a UserProvider");

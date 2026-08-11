@@ -9,7 +9,7 @@ import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { UserProvider, useUser } from "@/context/userContext"; 
+import useUser , { UserProvider } from "@/context/userContext"; 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export const unstable_settings = {

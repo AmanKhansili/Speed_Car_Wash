@@ -34,8 +34,9 @@ export interface Address {
   id: string;
   tag: "Home" | "Work" | "Other";
   addressLine1: string;
-  addressLine2: string;
   landmark?: string;
+  latitude?: number,
+  longitude?:number,
   isDefault?: boolean;
 }
 

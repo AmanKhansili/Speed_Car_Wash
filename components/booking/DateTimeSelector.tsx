@@ -81,11 +81,9 @@ export default function DateTimeSelector({
 
   return (
     <View style={styles.container}>
-      {/* Calendar Header with Calendar Icon Trigger */}
       <View style={styles.headerRow}>
         <Text style={styles.sectionTitle}>📅 Select Date</Text>
 
-        {/* Custom Date Selector Button */}
         <TouchableOpacity
           style={styles.calendarPickerBtn}
           onPress={() => setShowDatePicker(true)}
@@ -96,7 +94,6 @@ export default function DateTimeSelector({
         </TouchableOpacity>
       </View>
 
-      {/* Horizontal Date Calendar Scroll */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -129,7 +126,6 @@ export default function DateTimeSelector({
         })}
       </ScrollView>
 
-      {/* Native Pop-up Calendar Picker */}
       {showDatePicker && (
         <DateTimePicker
           value={selectedDate ? parseLocalDate(selectedDate) : new Date()} // ✅ Safe Parsing

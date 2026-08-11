@@ -7,7 +7,7 @@ import {
   Text,
   Alert,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router"; // 👈 Added useLocalSearchParams
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import DateTimeSelector from "@/components/booking/DateTimeSelector";
@@ -17,24 +17,20 @@ import Colors from "@/constants/colors";
 export default function Step2DateTimeScreen() {
   const router = useRouter();
   
-  // 1. Receive parameters from Step 1 (Vehicle & Service selection)
   const params = useLocalSearchParams<{ vehicleId?: string; serviceId?: string }>();
   const { vehicleId, serviceId } = params;
 
-  // 2. Local Screen States
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [serviceType, setServiceType] = useState<"pickup" | "walkin">("pickup");
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [addressText, setAddressText] = useState<string>("");
 
   const handleContinue = () => {
-    // Date Validation
     if (!selectedDate) {
       Alert.alert("Selection Required", "Please select a date & time slot to proceed.");
       return;
     }
 
-    // Address Validation (Pickup ke liye address selection check)
     let fullAddressText = "Walk-in at Workshop Center";
     if (serviceType === "pickup") {
       if (!selectedAddressId) {
@@ -47,7 +43,6 @@ export default function Step2DateTimeScreen() {
       fullAddressText = addressText || "Selected Pickup Address";
     }
 
-    // Navigate to Summary Screen with all combined booking data
     router.push({
       pathname: "/booking/summary",
       params: {
@@ -68,13 +63,11 @@ export default function Step2DateTimeScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* DATE SELECTOR & CALENDAR */}
         <DateTimeSelector
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
         />
 
-        {/* SERVICE TYPE (PICKUP vs WALKIN) */}
         <View style={styles.optionSection}>
           <Text style={styles.sectionTitle}>Select Service Type</Text>
           <View style={styles.typeContainer}>
@@ -122,7 +115,6 @@ export default function Step2DateTimeScreen() {
           </View>
         </View>
 
-        {/* CONDITIONAL ADDRESS SECTION */}
         <View style={styles.optionSection}>
           {serviceType === "pickup" ? (
             <AddressSelector
@@ -150,7 +142,6 @@ export default function Step2DateTimeScreen() {
         </View>
       </ScrollView>
 
-      {/* FOOTER BUTTON */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.continueBtn}
@@ -170,7 +161,7 @@ const styles = StyleSheet.create({
 
   optionSection: {
     paddingHorizontal: 16,
-    marginTop: 20,
+    marginTop: 30,
   },
   sectionTitle: {
     fontSize: 16,
@@ -213,7 +204,6 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
 
-  /* Walkin Card Styles */
   walkinCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -227,7 +217,6 @@ const styles = StyleSheet.create({
   walkinTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
   walkinSub: { fontSize: 12, color: "#6B7280", marginTop: 2, lineHeight: 18 },
 
-  /* FOOTER STYLES */
   footer: {
     position: "absolute",
     bottom: 0,

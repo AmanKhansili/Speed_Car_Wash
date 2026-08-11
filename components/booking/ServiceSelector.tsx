@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     marginBottom: 20,
-    // marginTop: 50,
+    marginTop: 50,
   },
   sectionHeader: {
     marginBottom: 12,

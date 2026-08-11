@@ -17,7 +17,6 @@ import Colors from "@/constants/colors";
 import { Address, AddressSelectorProps } from "@/types/service";
 
 export const SAVED_ADDRESSES: Address[] = [
- 
 ];
 
 export default function AddressSelector({
@@ -28,11 +27,11 @@ export default function AddressSelector({
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
 
-  // Form State
   const [tag, setTag] = useState<"Home" | "Work" | "Other">("Home");
   const [addressLine1, setAddressLine1] = useState("");
-  const [addressLine2, setAddressLine2] = useState("");
   const [landmark, setLandmark] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
   // 1. Fetch Current Location (GPS)
   const handleUseCurrentLocation = async () => {
@@ -47,18 +46,20 @@ export default function AddressSelector({
       }
 
       const currentLocation = await Location.getCurrentPositionAsync({});
+      const { latitude: lat, longitude: lng } = currentLocation.coords;
+
       const geocode = await Location.reverseGeocodeAsync({
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
+        latitude: lat,
+        longitude: lng,
       });
 
       if (geocode.length > 0) {
         const item = geocode[0];
-        const line1 = [item.name, item.streetNumber, item.street].filter(Boolean).join(", ");
-        const line2 = [item.subregion, item.city, item.region, item.postalCode].filter(Boolean).join(", ");
+        const line1 = [item.formattedAddress].filter(Boolean).join(", ");
 
         setAddressLine1(line1 || "Current Location");
-        setAddressLine2(line2 || "");
+        setLatitude(lat);
+        setLongitude(lng);
         setIsModalVisible(true);
       }
     } catch (error) {
@@ -70,8 +71,8 @@ export default function AddressSelector({
 
   // 2. Save New Address
   const handleSaveAddress = () => {
-    if (!addressLine1.trim() || !addressLine2.trim()) {
-      Alert.alert("Missing Details", "Please fill Address Line 1 & Line 2.");
+    if (!addressLine1.trim()) {
+      Alert.alert("Missing Details", "Please fill Address Line 1.");
       return;
     }
 
@@ -79,8 +80,9 @@ export default function AddressSelector({
       id: Date.now().toString(),
       tag,
       addressLine1,
-      addressLine2,
       landmark: landmark.trim() || undefined,
+      latitude: latitude ?? undefined,
+      longitude: longitude ?? undefined,
     };
 
     setAddresses((prev) => [newAddress, ...prev]);
@@ -88,9 +90,10 @@ export default function AddressSelector({
 
     // Reset & Close Modal
     setAddressLine1("");
-    setAddressLine2("");
     setLandmark("");
     setTag("Home");
+    setLatitude(null);
+    setLongitude(null);
     setIsModalVisible(false);
   };
 
@@ -169,7 +172,6 @@ export default function AddressSelector({
               </View>
 
               <Text style={styles.addressLine1}>{item.addressLine1}</Text>
-              <Text style={styles.addressLine2}>{item.addressLine2}</Text>
 
               {item.landmark && (
                 <View style={styles.landmarkWrapper}>
@@ -210,25 +212,20 @@ export default function AddressSelector({
                 ))}
               </View>
 
-              {/* Form Inputs */}
+              {/* Address Line 1 - Textarea (multiline) */}
               <Text style={styles.inputLabel}>Address Line 1 *</Text>
               <TextInput
-                style={styles.input}
-                placeholder="House/Flat No, Building, Street"
+                style={styles.textArea}
+                placeholder="House/Flat No, Building, Street, Area"
                 placeholderTextColor="#9CA3AF"
                 value={addressLine1}
                 onChangeText={setAddressLine1}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
               />
 
-              <Text style={styles.inputLabel}>Address Line 2 *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Area, Sector, City, Pincode"
-                placeholderTextColor="#9CA3AF"
-                value={addressLine2}
-                onChangeText={setAddressLine2}
-              />
-
+              {/* Landmark - Simple single-line input */}
               <Text style={styles.inputLabel}>Landmark (Optional)</Text>
               <TextInput
                 style={styles.input}
@@ -352,6 +349,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
   inputLabel: { fontSize: 13, fontWeight: "600", color: "#374151", marginTop: 12, marginBottom: 6 },
+
+  /* Simple single-line input (Landmark) */
   input: {
     borderWidth: 1.5,
     borderColor: Colors.border,
@@ -361,6 +360,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#111827",
   },
+
+  /* Multiline textarea (Address Line 1) */
+  textArea: {
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    height: 100,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#111827",
+  },
+
   tagContainer: { flexDirection: "row", gap: 10, marginBottom: 6 },
   tagChip: {
     paddingHorizontal: 16,

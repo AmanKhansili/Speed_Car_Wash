@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useUser } from "@/context/userContext";
+import useUser  from "@/context/userContext";
 import Colors from "@/constants/colors";
 
 export interface Booking {
