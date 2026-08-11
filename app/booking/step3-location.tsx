@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Text,
-  TextInput,
-  Alert,
-} from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router"; 
-import { Ionicons } from "@expo/vector-icons";
-import  useUser  from "@/context/userContext"; 
 import AddressSelector from "@/components/booking/AddressSelector";
 import Colors from "@/constants/colors";
+import useUser from "@/context/userContext";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function Step3LocationScreen() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export default function Step3LocationScreen() {
 
   const [serviceType, setServiceType] = useState<"pickup" | "walkin">("pickup");
 
-  // 3. Selected Address State
+  // Address States
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [addressText, setAddressText] = useState<string>("");
 
@@ -39,12 +39,15 @@ export default function Step3LocationScreen() {
   }, [userData.mobileNumber]);
 
   const handleContinue = async () => {
+    // 1. Phone number validation
     if (!phone || phone.trim().length !== 10) {
       Alert.alert("Invalid Phone", "Please enter a valid 10-digit mobile number.");
       return;
     }
 
     let fullAddressText = "Walk-in at Workshop Center";
+
+    // 2. Service type & Address validation
     if (serviceType === "pickup") {
       if (!selectedAddressId) {
         Alert.alert("Address Required", "Please select a pickup address to proceed.");
@@ -61,6 +64,7 @@ export default function Step3LocationScreen() {
       console.log("Error updating phone:", e);
     }
 
+    // 3. Navigate to Summary/Payment screen with params
     router.push({
       pathname: "/booking/summary",
       params: {
@@ -80,58 +84,39 @@ export default function Step3LocationScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Service Type Selection (Pickup vs Walk-in) */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Select Service Type</Text>
           <View style={styles.toggleWrapper}>
             <TouchableOpacity
-              style={[
-                styles.toggleBtn,
-                serviceType === "pickup" && styles.toggleBtnActive,
-              ]}
+              style={[styles.toggleBtn, serviceType === "pickup" && styles.toggleBtnActive]}
               activeOpacity={0.8}
               onPress={() => setServiceType("pickup")}
             >
               <Ionicons
                 name="car-outline"
                 size={18}
-                color={
-                  serviceType === "pickup"
-                    ? "#FFF"
-                    : Colors.textSecondary || "#6B7280"
-                }
+                color={serviceType === "pickup" ? "#FFF" : Colors.textSecondary || "#6B7280"}
               />
               <Text
-                style={[
-                  styles.toggleText,
-                  serviceType === "pickup" && styles.toggleTextActive,
-                ]}
+                style={[styles.toggleText, serviceType === "pickup" && styles.toggleTextActive]}
               >
                 Doorstep Pickup
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.toggleBtn,
-                serviceType === "walkin" && styles.toggleBtnActive,
-              ]}
+              style={[styles.toggleBtn, serviceType === "walkin" && styles.toggleBtnActive]}
               activeOpacity={0.8}
               onPress={() => setServiceType("walkin")}
             >
               <Ionicons
                 name="walk-outline"
                 size={18}
-                color={
-                  serviceType === "walkin"
-                    ? "#FFF"
-                    : Colors.textSecondary || "#6B7280"
-                }
+                color={serviceType === "walkin" ? "#FFF" : Colors.textSecondary || "#6B7280"}
               />
               <Text
-                style={[
-                  styles.toggleText,
-                  serviceType === "walkin" && styles.toggleTextActive,
-                ]}
+                style={[styles.toggleText, serviceType === "walkin" && styles.toggleTextActive]}
               >
                 Walk-in Center
               </Text>
@@ -139,6 +124,7 @@ export default function Step3LocationScreen() {
           </View>
         </View>
 
+        {/* Conditional Address or Workshop Info */}
         {serviceType === "pickup" ? (
           <AddressSelector
             selectedAddressId={selectedAddressId}
@@ -149,11 +135,7 @@ export default function Step3LocationScreen() {
           />
         ) : (
           <View style={styles.walkinCard}>
-            <Ionicons
-              name="location-sharp"
-              size={24}
-              color={Colors.primary || "#2563EB"}
-            />
+            <Ionicons name="location-sharp" size={24} color={Colors.primary || "#2563EB"} />
             <View style={{ flex: 1 }}>
               <Text style={styles.walkinTitle}>Workshop Address</Text>
               <Text style={styles.walkinSub}>
@@ -163,11 +145,10 @@ export default function Step3LocationScreen() {
           </View>
         )}
 
+        {/* Mobile Number Input Section */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Contact Mobile Number</Text>
-          <Text style={styles.sectionSub}>
-            We will send updates and booking confirmation here.
-          </Text>
+          <Text style={styles.sectionSub}>We will send updates and booking confirmation here.</Text>
 
           <View style={styles.phoneInputWrapper}>
             <View style={styles.countryCode}>
@@ -186,12 +167,9 @@ export default function Step3LocationScreen() {
         </View>
       </ScrollView>
 
+      {/* Bottom Footer Button */}
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.continueBtn}
-          activeOpacity={0.8}
-          onPress={handleContinue}
-        >
+        <TouchableOpacity style={styles.continueBtn} activeOpacity={0.8} onPress={handleContinue}>
           <Text style={styles.btnText}>View Summary & Pay</Text>
         </TouchableOpacity>
       </View>
