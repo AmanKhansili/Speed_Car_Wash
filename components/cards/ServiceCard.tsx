@@ -14,6 +14,7 @@ import {
   ViewStyle,
 } from "react-native";
 
+// Component Props
 interface ServiceCardProps {
   title: string;
   subtitle: string;
@@ -23,7 +24,9 @@ interface ServiceCardProps {
   tag?: string;
   image?: ImageSourcePropType | { uri: string };
   style?: StyleProp<ViewStyle>;
-  onPress?: () => void; 
+  onPress?: () => void;
+  isAdded?: boolean;
+  onAddPress?: () => void;
 }
 
 export default function ServiceCard({
@@ -36,9 +39,12 @@ export default function ServiceCard({
   image,
   style,
   onPress,
+  isAdded,
+  onAddPress,
 }: ServiceCardProps) {
   return (
     <TouchableOpacity style={[styles.card, style]} onPress={onPress} activeOpacity={0.9}>
+      {/* Image & Tag Section */}
       <View style={styles.imageArea}>
         {image && <Image source={image as any} style={styles.cardImage} resizeMode="cover" />}
         {tag && (
@@ -48,6 +54,7 @@ export default function ServiceCard({
         )}
       </View>
 
+      {/* Details Section */}
       <View style={styles.content}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
@@ -56,27 +63,33 @@ export default function ServiceCard({
           {subtitle}
         </Text>
 
+        {/* Ratings */}
         <View style={styles.metaRow}>
           <Ionicons name="star" size={14} color={Colors.warning} />
           <Text style={styles.ratingText}>{rating}</Text>
           <Text style={styles.reviewText}>({reviews})</Text>
         </View>
 
+        {/* Price & Add to Cart Button */}
         <View style={styles.priceRow}>
           <Text style={styles.priceText}>{price}</Text>
-          {/* Add button pehle se hai, wo design ke liye theek hai */}
-          <View style={styles.addBtn}>
-            <Ionicons name="add" size={20} color={Colors.surface} />
-          </View>
+          <TouchableOpacity
+            style={[styles.addBtn, isAdded && styles.addedBtn]}
+            onPress={onAddPress}
+            activeOpacity={0.8}
+          >
+            <Ionicons name={isAdded ? "checkmark" : "add"} size={20} color={Colors.surface} />
+          </TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
   card: {
-    width: 200, // Default width Home screen ke liye
+    width: 200,
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     padding: 12,
@@ -102,14 +115,19 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   tagText: { color: Colors.surface, fontSize: 10, fontWeight: "bold" },
+
   content: { paddingHorizontal: 4 },
   title: { fontSize: 15, fontWeight: "800", color: Colors.text },
   subtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, marginBottom: 8 },
+
   metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   ratingText: { fontSize: 12, fontWeight: "700", color: Colors.text, marginLeft: 4 },
   reviewText: { fontSize: 11, color: Colors.textLight, marginLeft: 4 },
+
   priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   priceText: { fontSize: 20, fontWeight: "800", color: Colors.primary },
+
+  // Button Styles
   addBtn: {
     backgroundColor: Colors.primary,
     width: 32,
@@ -117,5 +135,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.round,
     justifyContent: "center",
     alignItems: "center",
+  },
+  addedBtn: {
+    backgroundColor: "#10B981",
   },
 });
