@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useAuth } from "@clerk/expo";
 import Colors from "@/constants/colors";
 import SectionHeader from "@/components/common/SectionHeader";
 import UserInfoCard from "@/components/profile/userInfoCard";
@@ -16,6 +18,19 @@ import ProfileMenuList from "@/components/profile/ProfileMenuList";
 import MyVehiclesSection from "@/components/profile/MyVehiclesSection";
 
 export default function ProfileScreen() {
+  const { isSignedIn, isLoaded } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      router.replace("/auth");
+    }
+  }, [isLoaded, isSignedIn]);
+
+  if (!isLoaded || !isSignedIn) {
+    return null;
+  }
+
   const handleMenuPress = (menuId: string) => {
     console.log("Selected Menu Item:", menuId);
     if (menuId === "logout") {
@@ -64,7 +79,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background || "#F8FAFC",
   },
 
-  /* Header Styling */
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -88,7 +102,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
 
-  /* Scroll View Padding */
   scrollContent: {
     padding: 16,
     paddingBottom: 40,

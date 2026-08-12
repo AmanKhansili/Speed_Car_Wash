@@ -2,8 +2,9 @@
 
 # dependencies
 node_modules/
-
+*.txt
 # Expo
+*.env
 .expo/
 dist/
 web-build/
