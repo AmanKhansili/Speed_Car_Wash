@@ -1,42 +1,65 @@
-import MobileOtpVerification from "@/components/auth/Mobileotpverification";
-import { router } from "expo-router";
-import { Alert } from "react-native";
+import { useState } from "react";
+import { useSignIn, useSignUp } from "@clerk/expo";
 
-export default function AuthGate() {
-  // Changed return type to Promise<void>
-  const handleSendOtp = async (phone: string): Promise<void> => {
-    console.log(`[Mock Backend] Sending OTP to ${phone}`);
-    
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    Alert.alert("OTP Sent", "Use '123456' as your placeholder OTP.");
+export function useClerkPhoneAuth() {
+  const { signIn } = useSignIn();
+  const { signUp } = useSignUp();
+  const [mode, setMode] = useState<"signIn" | "signUp" | null>(null);
+
+  const sendOtp = async (phone: string) => {
+    const { error: createError } = await signIn.create({ identifier: phone });
+
+    if (!createError) {
+      const { error: sendError } = await signIn.phoneCode.sendCode();
+      if (sendError) {
+        throw new Error(sendError.message || "Could not send OTP.");
+      }
+      setMode("signIn");
+      return;
+    }
+
+    if (createError.code !== "form_identifier_not_found") {
+      throw new Error(createError.message || "Could not send OTP.");
+    }
+
+    const { error: signUpCreateError } = await signUp.create({ phoneNumber: phone });
+    if (signUpCreateError) {
+      throw new Error(signUpCreateError.message || "Could not start sign up.");
+    }
+
+    const { error: signUpSendError } = await signUp.verifications.sendPhoneCode();
+    if (signUpSendError) {
+      throw new Error(signUpSendError.message || "Could not send OTP.");
+    }
+
+    setMode("signUp");
   };
 
-  const handleVerifyOtp = async (phone: string, otp: string): Promise<boolean> => {
-    console.log(`[Mock Backend] Verifying OTP ${otp} for ${phone}`);
-    
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  const verifyOtp = async (_phone: string, code: string): Promise<boolean> => {
+    if (mode === "signIn") {
+      const { error } = await signIn.phoneCode.verifyCode({ code });
+      if (error) return false;
 
-    if (otp === "123456") {
-      return true;
-    } else {
-      Alert.alert("Invalid OTP", "Please use the placeholder OTP: 123456");
+      if (signIn.status === "complete") {
+        const { error: finalizeError } = await signIn.finalize();
+        return !finalizeError;
+      }
       return false;
     }
+
+    if (mode === "signUp") {
+      const { error } = await signUp.verifications.verifyPhoneCode({ code });
+      if (error) return false;
+
+      if (signUp.status === "complete") {
+        const { error: finalizeError } = await signUp.finalize();
+        return !finalizeError;
+      }
+      return false;
+    }
+
+    throw new Error("Call sendOtp before verifyOtp.");
   };
 
-  return (
-    <MobileOtpVerification
-      showSkip={true}
-      onSkip={() => router.replace("/(tabs)")}
-      onVerified={(phone) => {
-        console.log("User verified with phone:", phone);
-        router.replace("/(tabs)");
-      }}
-      onSendOtp={handleSendOtp}
-      onVerifyOtp={handleVerifyOtp}
-    />
-  );
+  return { sendOtp, verifyOtp };
 }

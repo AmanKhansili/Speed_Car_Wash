@@ -13,6 +13,7 @@ export default function Step1SelectionScreen() {
   const [selectedVehicle, setSelectedVehicle] = useState<string>(
     userData.selectedVehicleId || (userData.vehicles?.[0]?.id || "")
   );
+  
   const [selectedService, setSelectedService] = useState<string>("");
 
   useEffect(() => {

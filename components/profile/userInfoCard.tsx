@@ -2,26 +2,47 @@ import Colors from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useUser } from "@clerk/expo";
 
 interface UserInfoCardProps {
-  name?: string;
   isPremium?: boolean;
-  phone?: string;
-  email?: string;
-  avatarUrl?: string;
   onEditPress?: () => void;
   onChangeAvatar?: () => void;
+  onAddPhone?: () => void;
+  onAddEmail?: () => void;
 }
 
 export default function UserInfoCard({
-  name = "Amanjeet Kumar",
   isPremium = true,
-  phone = "+91 7025 89335",
-  email = "amanjeetkumar@email.com",
-  avatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80",
   onEditPress,
   onChangeAvatar,
+  onAddPhone,
+  onAddEmail,
 }: UserInfoCardProps) {
+  const { user, isLoaded } = useUser();
+
+  if (!isLoaded) {
+    return null;
+  }
+
+  const name =
+    user?.fullName ||
+    `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+    "Amanjeet Kumar";
+    
+  // 🔥 Fix: Primary email ke sath emailAddresses array se bhi check karenge
+  const email =
+    user?.primaryEmailAddress?.emailAddress ||
+    user?.emailAddresses?.[0]?.emailAddress;
+
+  const phone =
+    user?.primaryPhoneNumber?.phoneNumber ||
+    user?.phoneNumbers?.[0]?.phoneNumber;
+
+  const avatarUrl =
+    user?.imageUrl ||
+    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80";
+
   return (
     <TouchableOpacity activeOpacity={0.85} style={styles.cardContainer} onPress={onEditPress}>
       {/* Left: Avatar with Camera Badge */}
@@ -47,19 +68,33 @@ export default function UserInfoCard({
           </View>
         )}
 
-        {/* Phone */}
-        <View style={styles.detailRow}>
-          <Ionicons name="call-outline" size={13} color={Colors.textSecondary || "#64748B"} />
-          <Text style={styles.detailText}>{phone}</Text>
-        </View>
+        {/* Phone / Add Phone Option */}
+        {phone ? (
+          <View style={styles.detailRow}>
+            <Ionicons name="call-outline" size={13} color={Colors.textSecondary || "#64748B"} />
+            <Text style={styles.detailText}>{phone}</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.addActionRow} onPress={onAddPhone} activeOpacity={0.7}>
+            <Ionicons name="add-circle-outline" size={13} color={Colors.primary} />
+            <Text style={styles.addText}>Add phone number</Text>
+          </TouchableOpacity>
+        )}
 
-        {/* Email */}
-        <View style={styles.detailRow}>
-          <Ionicons name="mail-outline" size={13} color={Colors.textSecondary || "#64748B"} />
-          <Text style={styles.detailText} numberOfLines={1}>
-            {email}
-          </Text>
-        </View>
+        {/* Email / Add Email Option */}
+        {email ? (
+          <View style={styles.detailRow}>
+            <Ionicons name="mail-outline" size={13} color={Colors.textSecondary || "#64748B"} />
+            <Text style={styles.detailText} numberOfLines={1}>
+              {email}
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.addActionRow} onPress={onAddEmail} activeOpacity={0.7}>
+            <Ionicons name="add-circle-outline" size={13} color={Colors.primary} />
+            <Text style={styles.addText}>Add email address</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Right: Chevron Arrow */}
@@ -82,8 +117,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
   },
-
-  /* Avatar Area */
   avatarWrapper: {
     position: "relative",
     marginRight: 16,
@@ -107,8 +140,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#FFFFFF",
   },
-
-  /* Info Area */
   infoWrapper: {
     flex: 1,
     gap: 4,
@@ -122,7 +153,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    backgroundColor: "#F3E8FF", // Soft purple tint
+    backgroundColor: "#F3E8FF",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
@@ -144,8 +175,16 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary || "#64748B",
     fontWeight: "500",
   },
-
-  /* Action Icon */
+  addActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  addText: {
+    fontSize: 12.5,
+    color: Colors.primary,
+    fontWeight: "600",
+  },
   actionWrapper: {
     paddingLeft: 8,
   },

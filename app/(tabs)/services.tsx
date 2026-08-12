@@ -17,7 +17,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ServiceCard from "@/components/cards/ServiceCard";
 import SearchBar from "@/components/common/SearchBar";
 
-// NAYA DATA IMPORT HERE
 import { categoriesList, servicesData } from "@/constants/data";
 import { router } from "expo-router";
 
@@ -28,7 +27,6 @@ export default function ServicesScreen() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Filtering Logic
   const filteredServices = servicesData.filter((service) => {
     const matchesCategory = activeCategory === "All" || service.category === activeCategory;
     const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase());

@@ -8,27 +8,35 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ClerkProvider, ClerkLoaded } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 
-import useUser , { UserProvider } from "@/context/userContext"; 
+import useUser, { UserProvider } from "@/context/userContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export const unstable_settings = {
   anchor: "(tabs)",
 };
 
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+
+if (!publishableKey) {
+  throw new Error(
+    "Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY — check your .env file",
+  );
+}
+
 // Internal Navigation Component jo UserContext ko consume karega
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { userData } = useUser();
 
-  // Agar User Data local storage se load ho raha hai (optional guard)
-  // Aap context mein 'isLoading' state rakh ke bhi conditional rendering kar sakte ho
-  
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="booking" />
+        <Stack.Screen name="auth" />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
@@ -38,11 +46,14 @@ function RootLayoutNav() {
 // Main Root Layout Provider Wrapper
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* Dynamic Backend Sync ke liye agar Auth ID ho toh userId prop pass kar sakte ho */}
-      <UserProvider>
-        <RootLayoutNav />
-      </UserProvider>
-    </GestureHandlerRootView>
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+      <ClerkLoaded>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <UserProvider>
+            <RootLayoutNav />
+          </UserProvider>
+        </GestureHandlerRootView>
+      </ClerkLoaded>
+    </ClerkProvider>
   );
 }

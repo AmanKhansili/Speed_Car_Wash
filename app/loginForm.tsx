@@ -1,6 +1,6 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import MobileOtpVerification from "@/components/auth/Mobileotpverification";
+import MobileOtpVerification from "@/components/auth/AuthGate";
 import { router } from "expo-router";
 
 export default function LoginScreen() {
