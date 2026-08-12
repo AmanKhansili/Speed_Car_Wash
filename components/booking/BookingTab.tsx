@@ -68,6 +68,17 @@ export default function BookingTabs() {
     }
   });
 
+  // Testing ke liye local bookings clean karne ka function
+  // const clearAllBookings = async () => {
+  //   try {
+  //     await AsyncStorage.removeItem("user_bookings");
+  //     setBookings([]); // State bhi khali kar do
+  //     alert("All local bookings cleared!");
+  //   } catch (e) {
+  //     console.log("Failed to clear", e);
+  //   }
+  // };
+
   const renderBookingCard = ({ item }: { item: Booking }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -177,6 +188,15 @@ export default function BookingTabs() {
           <Text style={styles.emptyText}>No {activeTab} bookings found.</Text>
         </View>
       )}
+      {/* Remove local booking */}
+      {/* <TouchableOpacity
+        style={{ padding: 10, backgroundColor: "#EF4444", borderRadius: 8, marginVertical: 10 }}
+        onPress={clearAllBookings}
+      >
+        <Text style={{ color: "#FFF", textAlign: "center", fontWeight: "700" }}>
+          Clear Local Bookings (Test)
+        </Text>
+      </TouchableOpacity> */}
     </View>
   );
 }
