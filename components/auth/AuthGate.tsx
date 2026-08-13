@@ -8,98 +8,89 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useSignIn, useSignUp, useOAuth } from "@clerk/expo";
-import * as WebBrowser from "expo-web-browser";
 import Colors from "@/constants/colors";
+import { useClerkAuth } from "@/hooks/useClerkAuth";
 
-// Warm up the browser for OAuth redirect on Expo
-WebBrowser.maybeCompleteAuthSession();
+type Mode = "signIn" | "signUp" | "verifyEmail";
 
 export default function AuthGate() {
-  const { signIn } = useSignIn();
-  const { signUp } = useSignUp();
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, verifyEmailOtp } =
+    useClerkAuth();
 
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [mode, setMode] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
-  
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Google OAuth Handler
+  const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value);
+
+  const goHome = () => router.replace("/(tabs)");
+
   const handleGoogleAuth = async () => {
     setError(null);
     try {
-      setLoading(true);
-      const { createdSessionId, setActive } = await startOAuthFlow();
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
-        router.replace("/(tabs)");
-      }
+      setIsGoogleLoading(true);
+      await signInWithGoogle();
     } catch (err: any) {
-      setError(err.message || "Google sign-in failed.");
+      console.log("GOOGLE AUTH ERROR:", err); // catch me bhi log karo
+      setError(err.message || "Google sign-in failed. Please try again.");
     } finally {
-      setLoading(false);
+      setIsGoogleLoading(false);
     }
   };
 
-  // 2. Email & Password Handler (Sign In / Sign Up / Verification)
   const handleEmailAuth = async () => {
     setError(null);
-    if (!email || !password) {
-      setError("Please fill in all fields.");
+
+    if (!isValidEmail(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
       return;
     }
 
     try {
-      setLoading(true);
-
-      if (pendingVerification) {
-        const { error: verifyError } = await signUp.verifications.verifyEmailCode({ code });
-        if (verifyError) throw new Error(verifyError.message || "Invalid verification code.");
-
-        if (signUp.status === "complete") {
-          await signUp.finalize();
-          router.replace("/(tabs)");
-        }
-        return;
-      }
-
-      if (isSignUp) {
-        const { error: signUpError } = await signUp.create({
-          emailAddress: email,
-          password,
-        });
-        if (signUpError) throw new Error(signUpError.message || "Sign up failed.");
-
-        const { error: sendError } = await signUp.verifications.sendEmailCode();
-        if (sendError) throw new Error(sendError.message || "Could not send verification email.");
-
-        setPendingVerification(true);
+      setIsSubmitting(true);
+      if (mode === "signUp") {
+        await signUpWithEmail(email, password);
+        setMode("verifyEmail");
       } else {
-        const { error: signInError } = await signIn.create({
-          identifier: email,
-          password,
-        });
-        if (signInError) throw new Error(signInError.message || "Invalid email or password.");
-
-        if (signIn.status === "complete") {
-          await signIn.finalize();
-          router.replace("/(tabs)");
-        }
+        await signInWithEmail(email, password);
       }
-      Keyboard.dismiss();
     } catch (err: any) {
-      setError(err.message || "Authentication failed.");
+      setError(err.message || "Something went wrong. Please try again.");
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    setError(null);
+
+    if (code.length < 4) {
+      setError("Please enter the code sent to your email.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const success = await verifyEmailOtp(code);
+      if (!success) {
+        setError("Incorrect code. Please try again.");
+      }
+      // success true hone par bhi goHome() nahi — index.tsx handle karega
+    } catch (err: any) {
+      setError(err.message || "Verification failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -111,45 +102,88 @@ export default function AuthGate() {
       <View style={styles.container}>
         <TouchableOpacity
           style={styles.skipBtn}
-          onPress={() => router.replace("/(tabs)")}
+          onPress={goHome}
           activeOpacity={0.7}
         >
           <Text style={styles.skipText}>Skip</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={Colors.textSecondary}
+          />
         </TouchableOpacity>
 
         <View style={styles.content}>
           <View style={styles.iconWrapper}>
             <Ionicons
-              name={pendingVerification ? "mail-outline" : "lock-closed-outline"}
+              name="car-sport-outline"
               size={32}
               color={Colors.primary}
             />
           </View>
 
-          <Text style={styles.title}>
-            {pendingVerification
-              ? "Verify Your Email"
-              : isSignUp
-              ? "Create Account"
-              : "Welcome Back"}
-          </Text>
-          <Text style={styles.subtitle}>
-            {pendingVerification
-              ? `Enter the verification code sent to ${email}`
-              : "Sign in or sign up with Google or Email"}
-          </Text>
-
-          {!pendingVerification && (
+          {mode === "verifyEmail" ? (
             <>
+              <Text style={styles.title}>Check Your Email</Text>
+              <Text style={styles.subtitle}>
+                We sent a verification code to {email}
+              </Text>
+
+              <TextInput
+                style={styles.otpInput}
+                placeholder="Enter code"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="number-pad"
+                value={code}
+                onChangeText={setCode}
+                autoFocus
+              />
+
+              {error && <Text style={styles.errorText}>{error}</Text>}
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryBtn,
+                  isSubmitting && styles.primaryBtnDisabled,
+                ]}
+                activeOpacity={0.85}
+                onPress={handleVerifyCode}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Verify</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.title}>
+                {mode === "signIn" ? "Welcome Back" : "Create Your Account"}
+              </Text>
+              <Text style={styles.subtitle}>
+                {mode === "signIn"
+                  ? "Sign in to book your car wash"
+                  : "Sign up to get started"}
+              </Text>
+
               <TouchableOpacity
                 style={styles.googleBtn}
+                activeOpacity={0.85}
                 onPress={handleGoogleAuth}
-                disabled={loading}
-                activeOpacity={0.8}
+                disabled={isGoogleLoading}
               >
-                <Ionicons name="logo-google" size={20} color="#DB4437" style={{ marginRight: 10 }} />
-                <Text style={styles.googleBtnText}>Continue with Google</Text>
+                {isGoogleLoading ? (
+                  <ActivityIndicator size="small" color={Colors.text} />
+                ) : (
+                  <>
+                    <Ionicons name="logo-google" size={18} color="#111827" />
+                    <Text style={styles.googleBtnText}>
+                      Continue with Google
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
 
               <View style={styles.dividerRow}>
@@ -157,38 +191,7 @@ export default function AuthGate() {
                 <Text style={styles.dividerText}>or</Text>
                 <View style={styles.dividerLine} />
               </View>
-            </>
-          )}
 
-          {pendingVerification ? (
-            <>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter 6-digit code"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="number-pad"
-                maxLength={6}
-                value={code}
-                onChangeText={setCode}
-                autoFocus
-              />
-              {error && <Text style={styles.errorText}>{error}</Text>}
-
-              <TouchableOpacity
-                style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
-                onPress={handleEmailAuth}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Verify Code</Text>
-                )}
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
               <TextInput
                 style={styles.input}
                 placeholder="Email address"
@@ -198,6 +201,7 @@ export default function AuthGate() {
                 value={email}
                 onChangeText={setEmail}
               />
+
               <TextInput
                 style={styles.input}
                 placeholder="Password"
@@ -210,16 +214,19 @@ export default function AuthGate() {
               {error && <Text style={styles.errorText}>{error}</Text>}
 
               <TouchableOpacity
-                style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
-                onPress={handleEmailAuth}
-                disabled={loading}
+                style={[
+                  styles.primaryBtn,
+                  isSubmitting && styles.primaryBtnDisabled,
+                ]}
                 activeOpacity={0.85}
+                onPress={handleEmailAuth}
+                disabled={isSubmitting}
               >
-                {loading ? (
+                {isSubmitting ? (
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
                   <Text style={styles.primaryBtnText}>
-                    {isSignUp ? "Sign Up" : "Sign In"}
+                    {mode === "signIn" ? "Sign In" : "Sign Up"}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -227,14 +234,17 @@ export default function AuthGate() {
               <TouchableOpacity
                 style={styles.switchModeBtn}
                 onPress={() => {
-                  setIsSignUp(!isSignUp);
+                  setMode(mode === "signIn" ? "signUp" : "signIn");
                   setError(null);
                 }}
               >
                 <Text style={styles.switchModeText}>
-                  {isSignUp
-                    ? "Already have an account? Sign In"
-                    : "Don't have an account? Sign Up"}
+                  {mode === "signIn"
+                    ? "Don't have an account? "
+                    : "Already have an account? "}
+                  <Text style={styles.switchModeLink}>
+                    {mode === "signIn" ? "Sign Up" : "Sign In"}
+                  </Text>
                 </Text>
               </TouchableOpacity>
             </>
@@ -247,23 +257,102 @@ export default function AuthGate() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: "#FFF", paddingHorizontal: 24, paddingTop: 20 },
-  skipBtn: { flexDirection: "row", alignItems: "center", alignSelf: "flex-end", paddingVertical: 8, paddingHorizontal: 4 },
-  skipText: { fontSize: 14, fontWeight: "600", color: Colors.textSecondary, marginRight: 2 },
-  content: { flex: 1, justifyContent: "center", alignItems: "center", width: "100%" },
-  iconWrapper: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginBottom: 20 },
-  title: { fontSize: 20, fontWeight: "700", color: "#111827", textAlign: "center" },
-  subtitle: { fontSize: 13.5, color: Colors.textSecondary, textAlign: "center", marginTop: 8, marginBottom: 24, lineHeight: 19 },
-  googleBtn: { flexDirection: "row", width: "100%", borderWidth: 1.5, borderColor: Colors.border, borderRadius: 12, paddingVertical: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#FFF", marginBottom: 16 },
-  googleBtnText: { fontSize: 15, fontWeight: "600", color: "#111827" },
-  dividerRow: { flexDirection: "row", alignItems: "center", width: "100%", marginBottom: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: "#FFF",
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  skipBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  skipText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.textSecondary,
+    marginRight: 2,
+  },
+  content: { flex: 1, justifyContent: "center" },
+  iconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    alignSelf: "center",
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 13.5,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 28,
+  },
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginBottom: 20,
+  },
+  googleBtnText: { fontSize: 14.5, fontWeight: "700", color: "#111827" },
+  dividerRow: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { marginHorizontal: 10, color: Colors.textSecondary, fontSize: 13 },
-  input: { width: "100%", borderWidth: 1.5, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#111827", marginBottom: 12 },
-  errorText: { color: "#DC2626", fontSize: 12.5, marginBottom: 12, width: "100%", textAlign: "left", paddingLeft: 4 },
-  primaryBtn: { width: "100%", backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 4 },
+  dividerText: {
+    marginHorizontal: 10,
+    fontSize: 12.5,
+    color: Colors.textSecondary,
+  },
+  input: {
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#111827",
+    marginBottom: 12,
+  },
+  otpInput: {
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 20,
+    letterSpacing: 8,
+    textAlign: "center",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  errorText: { color: "#DC2626", fontSize: 12.5, marginBottom: 12 },
+  primaryBtn: {
+    width: "100%",
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 4,
+  },
   primaryBtnDisabled: { opacity: 0.7 },
   primaryBtnText: { color: "#FFF", fontSize: 15, fontWeight: "700" },
-  switchModeBtn: { marginTop: 16, alignItems: "center" },
-  switchModeText: { fontSize: 13.5, fontWeight: "600", color: Colors.primary },
+  switchModeBtn: { marginTop: 18, alignItems: "center" },
+  switchModeText: { fontSize: 13.5, color: Colors.textSecondary },
+  switchModeLink: { color: Colors.primary, fontWeight: "700" },
 });

@@ -12,6 +12,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    // Clerk handles auth/session — Supabase is used purely as a database here.
     persistSession: false,
     autoRefreshToken: false,
   },

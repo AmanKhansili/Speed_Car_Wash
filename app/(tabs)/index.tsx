@@ -21,9 +21,11 @@ import MembershipBanner from "@/components/home/MembershipBanner";
 import QuickActions from "@/components/home/QuickActions";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
+import { useUser, useClerk } from "@clerk/expo";
 
 export default function HomeScreen() {
   const [address, setAddress] = useState("Fetching location...");
+  const { user, isLoaded: isClerkLoaded } = useUser();
 
   useEffect(() => {
     (async () => {
@@ -65,7 +67,10 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* HEADER */}
         <View style={styles.header}>
           <View>
@@ -95,22 +100,31 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity style={styles.notificationBtn}>
-            <Ionicons name="notifications-outline" size={22} color={Colors.text} />
+            <Ionicons
+              name="notifications-outline"
+              size={22}
+              color={Colors.text}
+            />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
         </View>
 
         {/* GREETING */}
         <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>Hello, Aman 👋</Text>
-          <Text style={styles.greetingSub}>Keep your car clean, Keep your ride fresh</Text>
+          <Text style={styles.greetingTitle}>Hello, {user?.firstName} 👋</Text>
+          <Text style={styles.greetingSub}>
+            Keep your car clean, Keep your ride fresh
+          </Text>
         </View>
 
         <HeroBanner />
         <QuickActions />
 
         {/* POPULAR SERVICES */}
-        <SectionTitle title="Popular Services" onPress={() => router.push("/services")} />
+        <SectionTitle
+          title="Popular Services"
+          onPress={() => router.push("/services")}
+        />
 
         <ScrollView
           horizontal
@@ -161,7 +175,10 @@ export default function HomeScreen() {
         <MembershipBanner />
 
         {/* CUSTOMER REVIEWS */}
-        <SectionTitle title="Customer Reviews" onPress={() => router.push("/services")} />
+        <SectionTitle
+          title="Customer Reviews"
+          onPress={() => router.push("/services")}
+        />
 
         <ScrollView
           horizontal
@@ -209,7 +226,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.background,
   },
   greetingSection: { paddingHorizontal: 16, marginBottom: 24 },
-  greetingTitle: { fontSize: 24, fontWeight: "800", color: Colors.text, marginBottom: 6 },
+  greetingTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: Colors.text,
+    marginBottom: 6,
+  },
   greetingSub: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
   sectionHeader: {
     flexDirection: "row",
@@ -223,6 +245,16 @@ const styles = StyleSheet.create({
   horizontalScroll: { paddingLeft: 16, paddingRight: 8, paddingBottom: 16 },
 
   locationContainer: { flexDirection: "row", alignItems: "center", gap: 6 },
-  locationLabel: { fontSize: 11, color: "#6B7280", fontWeight: "600", textAlign: "center" },
-  locationText: { fontSize: 12, color: Colors.text, fontWeight: "700", textAlign: "center" },
+  locationLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  locationText: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: "700",
+    textAlign: "center",
+  },
 });

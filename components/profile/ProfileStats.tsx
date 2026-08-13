@@ -12,10 +12,10 @@ interface ProfileStatsProps {
 }
 
 export default function ProfileStats({
-  totalBookings = 12,
-  completed = 7,
-  upcoming = 3,
-  savedServices = 2,
+  totalBookings = 0,
+  completed = 0,
+  upcoming = 0,
+  savedServices = 0,
   onStatPress,
 }: ProfileStatsProps) {
   const statsList = [
@@ -47,21 +47,26 @@ export default function ProfileStats({
 
   return (
     <View style={styles.statsContainer}>
-      {statsList.map((item) => (
+      {statsList.map((item, index) => (
         <TouchableOpacity
           key={item.id}
           activeOpacity={0.7}
-          style={styles.statCard}
+          style={[
+            styles.statCard,
+            index !== statsList.length - 1 && styles.borderRight,
+          ]}
           onPress={() => onStatPress && onStatPress(item.id)}
         >
           <Ionicons
             name={item.icon}
-            size={20}
-            color={Colors.primary}
+            size={18}
+            color={Colors.primary || "#6366F1"}
             style={styles.icon}
           />
           <Text style={styles.statCount}>{item.count}</Text>
-          <Text style={styles.statLabel}>{item.label}</Text>
+          <Text style={styles.statLabel} numberOfLines={1}>
+            {item.label}
+          </Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -76,13 +81,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface || "#FFFFFF",
     borderRadius: 18,
     paddingVertical: 14,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: Colors.border || "#F1F5F9",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -92,8 +97,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 2,
   },
+  borderRight: {
+    borderRightWidth: 1,
+    borderRightColor: Colors.border || "#F1F5F9",
+  },
   icon: {
-    marginBottom: 6,
+    marginBottom: 4,
   },
   statCount: {
     fontSize: 16,
@@ -102,7 +111,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   statLabel: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: "600",
     color: Colors.textSecondary || "#64748B",
     textAlign: "center",
