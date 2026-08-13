@@ -12,45 +12,23 @@ import Colors from "@/constants/colors";
 
 export interface Vehicle {
   id: string;
-  name: string;
-  type: string;
-  number: string;
-  image: string;
+  name: string;      // e.g. "Hyundai i20" (or `${make} ${model}`)
+  type: string;      // e.g. "Hatchback", "SUV"
+  number: string;    // e.g. "DL 01 AB 1234"
+  image?: string;
 }
 
-const VEHICLES_DATA: Vehicle[] = [
-  {
-    id: "v1",
-    name: "Hyundai i20",
-    type: "Hatchback",
-    number: "DL 01 AB 1234",
-    image:
-      "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=300&auto=format&fit=crop&q=80",
-  },
-  {
-    id: "v2",
-    name: "Mahindra Thar",
-    type: "SUV",
-    number: "UP 16 CD 5678",
-    image:
-      "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=300&auto=format&fit=crop&q=80",
-  },
-  {
-    id: "v3",
-    name: "Honda City",
-    type: "Sedan",
-    number: "HR 26 EF 9012",
-    image:
-      "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&auto=format&fit=crop&q=80",
-  },
-];
-
 interface MyVehiclesSectionProps {
+  vehicles?: Vehicle[];
   onAddCarPress?: () => void;
   onCarPress?: (car: Vehicle) => void;
 }
 
+const DEFAULT_CAR_IMAGE =
+  "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=300&auto=format&fit=crop&q=80";
+
 export default function MyVehiclesSection({
+  vehicles = [],
   onAddCarPress,
   onCarPress,
 }: MyVehiclesSectionProps) {
@@ -69,45 +47,62 @@ export default function MyVehiclesSection({
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContainer}
-      >
-        {VEHICLES_DATA.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            activeOpacity={0.85}
-            style={styles.carCard}
-            onPress={() => onCarPress && onCarPress(item)}
-          >
-            {/* Car Image */}
-            <Image source={{ uri: item.image }} style={styles.carImage} />
+      {/* Empty State (If 0 vehicles) */}
+      {vehicles.length === 0 ? (
+        <TouchableOpacity
+          style={styles.emptyCard}
+          activeOpacity={0.8}
+          onPress={onAddCarPress}
+        >
+          <Ionicons name="car-outline" size={32} color={Colors.primary || "#6366F1"} />
+          <Text style={styles.emptyTitle}>No vehicles added yet</Text>
+          <Text style={styles.emptySubText}>Tap here to add your first car</Text>
+        </TouchableOpacity>
+      ) : (
+        /* Horizontal Vehicle List */
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContainer}
+        >
+          {vehicles.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.85}
+              style={styles.carCard}
+              onPress={() => onCarPress && onCarPress(item)}
+            >
+              {/* Car Image */}
+              <Image
+                source={{ uri: item.image || DEFAULT_CAR_IMAGE }}
+                style={styles.carImage}
+              />
 
-            {/* Car Info */}
-            <View style={styles.carDetails}>
-              <View style={styles.topRow}>
-                <Text style={styles.carName} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <View style={styles.typeBadge}>
-                  <Text style={styles.typeText}>{item.type}</Text>
+              {/* Car Info */}
+              <View style={styles.carDetails}>
+                <View style={styles.topRow}>
+                  <Text style={styles.carName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <View style={styles.typeBadge}>
+                    <Text style={styles.typeText}>{item.type}</Text>
+                  </View>
+                </View>
+
+                {/* Plate Number */}
+                <View style={styles.plateContainer}>
+                  <Ionicons
+                    name="car-sport-outline"
+                    size={12}
+                    color={Colors.textSecondary || "#64748B"}
+                  />
+                  <Text style={styles.plateNumber}>{item.number}</Text>
                 </View>
               </View>
-
-              {/* Plate Number */}
-              <View style={styles.plateContainer}>
-                <Ionicons
-                  name="car-sport-outline"
-                  size={12}
-                  color={Colors.textSecondary || "#64748B"}
-                />
-                <Text style={styles.plateNumber}>{item.number}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -138,7 +133,7 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: Colors.primary,
+    color: Colors.primary || "#6366F1",
     marginLeft: 2,
   },
   scrollContainer: {
@@ -200,5 +195,27 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.textSecondary || "#64748B",
     letterSpacing: 0.5,
+  },
+  /* Empty State Styles */
+  emptyCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderStyle: "dashed",
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.text || "#0F172A",
+    marginTop: 8,
+  },
+  emptySubText: {
+    fontSize: 12,
+    color: Colors.textSecondary || "#64748B",
+    marginTop: 2,
   },
 });

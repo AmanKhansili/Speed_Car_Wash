@@ -1,24 +1,26 @@
-import { useEffect } from 'react';
-import { Text, View, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+// app/auth/oauth-native-callback.tsx
+import { useUser } from "@clerk/expo";
+import { Redirect } from "expo-router";
+import { View, ActivityIndicator } from "react-native";
+import Colors from "@/constants/colors";
 
-export default function OAuthNativeCallback() {
-  const router = useRouter();
+export default function SSOCallback() {
+  const { isLoaded, isSignedIn } = useUser();
 
-  useEffect(() => {
-    // Clerk session ko automatically handle kar leta hai, 
-    // yeh page bas ek temporary landing zone hai jo redirect karega.
-    const timer = setTimeout(() => {
-      router.replace('/(tabs)'); // Apne home/dashboard route ka path yahan dein
-    }, 500);
+  // Jab tak Clerk state settle nahi hoti (setActive() resolve hone ka wait),
+  // spinner dikhao — kahin navigate mat karo.
+  if (!isLoaded) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
-    return () => clearTimeout(timer);
-  }, []);
+  // State settle ho gayi — ab decide karo kahan jaana hai.
+  if (isSignedIn) {
+    return <Redirect href="/(tabs)" />;
+  }
 
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-      <ActivityIndicator size="large" color="#ffffff" />
-      <Text style={{ color: '#ffffff', marginTop: 12, fontSize: 16 }}>Completing login...</Text>
-    </View>
-  );
+  return <Redirect href="/" />;
 }

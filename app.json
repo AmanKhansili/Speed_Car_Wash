@@ -25,6 +25,8 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-secure-store",
+      "@clerk/expo",
       "expo-router",
       [
         "expo-splash-screen",
