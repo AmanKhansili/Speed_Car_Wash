@@ -171,9 +171,9 @@ export const servicesData = [
   },
   {
     id: "13",
-    title:
+    title: "LEATHER CONDITIONING",
+    subtitle:
       "In this treatment, an intensive cleansing of the leather is allotted by a proprietary chemical. This removes the dirt, mud; grime together with terribly powerful stains like chocolates, coffee/ tea etc. The aerosol accustomed clean the surface dries quickly, hence no unhealthy odors and creating the interiors recent.",
-    subtitle: "Deep Clean & Condition for Rich Look",
     price: "₹1000",
     rating: "4.8",
     reviews: "76",

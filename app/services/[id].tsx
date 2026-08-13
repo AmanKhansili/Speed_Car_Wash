@@ -15,11 +15,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// 🚀 ZUSTAND STORE IMPORT
+import { useBookingStore } from "../../store/bookingStore";
+
 export default function ServiceDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
 
-  // URL se jo ID aayi, uske base par data nikal liya
+  // 🚀 ZUSTAND STATE
+  const { addService } = useBookingStore();
+
   const service = servicesData.find((s) => s.id === id);
 
   if (!service) {
@@ -27,13 +32,29 @@ export default function ServiceDetailsScreen() {
       <SafeAreaView style={styles.errorContainer}>
         <Text>Service not found!</Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text>Go Back</Text>
+          <Text style={{ color: Colors.primary, marginTop: 10 }}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   const featuresList = service.description.split("+").map((item) => item.trim());
+
+  // 🚀 BOOK NOW ACTION
+  const handleBookNow = () => {
+    // Price ko number me convert karna (e.g. "₹599" -> 599)
+    const numericPrice = parseInt(service.price.replace(/[^\d]/g, ""), 10);
+
+    // Store me service add karna
+    addService({
+      id: service.id,
+      title: service.title,
+      price: numericPrice,
+    });
+
+    // Checkout (Step 1) par redirect karna
+    router.push("/booking/step1-selection");
+  };
 
   return (
     <View style={styles.container}>
@@ -49,7 +70,6 @@ export default function ServiceDetailsScreen() {
           <Image source={service.image as any} style={styles.mainImage} resizeMode="cover" />
           <View style={styles.overlay} />
 
-          {/* Back Button over Image */}
           <SafeAreaView edges={["top"]} style={styles.headerSafe}>
             <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
               <Ionicons name="chevron-back" size={24} color="#FFF" />
@@ -57,7 +77,7 @@ export default function ServiceDetailsScreen() {
           </SafeAreaView>
         </View>
 
-        {/* CONTENT SECTION (Overlapping image slightly) */}
+        {/* CONTENT SECTION */}
         <View style={styles.contentContainer}>
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{service.category}</Text>
@@ -100,7 +120,9 @@ export default function ServiceDetailsScreen() {
           <Text style={styles.bottomPriceLabel}>Total Price</Text>
           <Text style={styles.bottomPrice}>{service.price}</Text>
         </View>
-        <TouchableOpacity style={styles.bookBtn}>
+
+        {/* 🚀 ATTACHED FUNCTION TO BUTTON */}
+        <TouchableOpacity style={styles.bookBtn} onPress={handleBookNow} activeOpacity={0.8}>
           <Text style={styles.bookBtnText}>Book Now</Text>
         </TouchableOpacity>
       </View>
@@ -114,7 +136,7 @@ const styles = StyleSheet.create({
 
   imageContainer: { width: "100%", height: 300, position: "relative" },
   mainImage: { width: "100%", height: "100%" },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" }, // Dark gradient effect
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
   headerSafe: { position: "absolute", top: 0, left: 0, right: 0, paddingHorizontal: 16 },
   backBtn: {
     width: 40,
@@ -179,7 +201,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     paddingBottom: 32,
-  }, // paddingBottom for iOS safe area
+  },
   bottomPriceLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 2 },
   bottomPrice: { fontSize: 24, fontWeight: "800", color: Colors.primary },
   bookBtn: {

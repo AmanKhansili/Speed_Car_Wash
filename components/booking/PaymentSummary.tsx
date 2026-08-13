@@ -16,15 +16,19 @@ export default function PaymentSummary({
   const [appliedDiscount, setAppliedDiscount] = useState(initialDiscount);
   const [couponApplied, setCouponApplied] = useState(false);
 
-  // Helper function to extract numeric price from bookingData or props
   const getCalculatedBasePrice = (): number => {
     if (customBasePrice) return customBasePrice;
+
+    // 🚀 'any' casting se TypeScript ka error turant khatam ho jayega
+    const data = bookingData as any;
+    if (data?.itemTotal && typeof data.itemTotal === "number") {
+      return data.itemTotal;
+    }
 
     if (bookingData?.servicePrice) {
       if (typeof bookingData.servicePrice === "number") {
         return bookingData.servicePrice;
       }
-      // String me se numeric value filter karna (e.g. "₹599" -> 599)
       const numeric = bookingData.servicePrice.replace(/[^0-9]/g, "");
       return numeric ? parseInt(numeric, 10) : 599;
     }
