@@ -1,145 +1,144 @@
-import useUser from "@/context/userContext";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
-import PaymentSummary from "@/components/booking/PaymentSummary";
 import Colors from "@/constants/colors";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useState } from "react";
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-// ZUSTAND STORE IMPORT
 import { useBookingStore } from "@/store/bookingStore";
+import { supabase } from "@/utils/supabase";
 
-export default function Step4SummaryScreen() {
-  const router = useRouter();
-
-  const { userData, updateBookings } = useUser() as any;
+export default function BookingSummaryScreen() {
   const { selectedServices, getTotalPrice, clearCart } = useBookingStore();
-
-  const params = useLocalSearchParams() as {
-    vehicleId?: string;
+  const params = useLocalSearchParams<{
     date?: string;
     serviceType?: string;
-    addressId?: string;
     addressText?: string;
-    phone?: string;
-  };
+  }>();
 
-  const selectedVehicle = userData?.vehicles?.find((v: any) => v.id === params.vehicleId) || null;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const itemTotal = getTotalPrice();
-  const gstAmount = Math.round(itemTotal * 0.18);
-  const convenienceFee = 49;
-  const grandTotal = itemTotal + gstAmount + convenienceFee;
+  const handleConfirmBooking = async () => {
+    try {
+      setIsSubmitting(true);
 
-  // Highest price wali service nikalna safely
-  const highestPricedService =
-    selectedServices.length > 0
-      ? selectedServices.reduce(
-          (max: any, service: any) => (service.price > (max?.price || 0) ? service : max),
-          selectedServices[0],
-        )
-      : null;
-
-  const bookingData = {
-    vehicleId: params.vehicleId,
-    vehicle: selectedVehicle,
-    services: selectedServices,
-    date: params.date,
-    serviceType: (params.serviceType as "pickup" | "walkin") || "pickup",
-    addressId: params.addressId,
-    addressText: params.addressText,
-    phone: params.phone || userData?.mobileNumber,
-    itemTotal,
-    gstAmount,
-    convenienceFee,
-    grandTotal,
-    image: highestPricedService?.image,
-  };
-
-  const handleMakePayment = async () => {
-    const newBooking = {
-      id: Date.now().toString(),
-      title: selectedServices.map((s: any) => s.title).join(", "),
-      price: `₹${grandTotal}`,
-      date: params.date || "Scheduled",
-      address: params.addressText || "Workshop Center",
-      status: "Confirmed" as const,
-      type: "upcoming" as const,
-      image: highestPricedService?.image || "",
-    };
-
-    const existingBookings = userData?.bookings || [];
-    const updatedBookings = [newBooking, ...existingBookings];
-
-    if (updateBookings) {
-      await updateBookings(updatedBookings);
-    }
-
-    Alert.alert("Success", "Booking confirmed successfully!", [
-      {
-        text: "OK",
-        onPress: () => {
-          clearCart();
-          router.replace("/(tabs)/bookings");
+      // 🚀 Supabase bookings table mein extra details ke sath insert
+      const { error } = await supabase.from("bookings").insert([
+        {
+          user_id: "test_user_aman", // Testing dummy ID
+          services_booked: selectedServices,
+          total_amount: getTotalPrice(),
+          booking_date: params.date || new Date().toISOString(),
+          service_type: params.serviceType || "pickup",
+          address: params.addressText || "Workshop Center",
+          status: "Pending",
         },
-      },
-    ]);
+      ]);
+
+      if (error) throw error;
+
+      Alert.alert("Success", "Your booking has been confirmed!", [
+        {
+          text: "OK",
+          onPress: () => {
+            clearCart();
+            router.replace("/(tabs)/bookings" as any); // Seedha Bookings tab par bhej do
+          },
+        },
+      ]);
+    } catch (error: any) {
+      Alert.alert("Booking Failed", error.message);
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <PaymentSummary bookingData={bookingData} />
-      </ScrollView>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Booking Summary</Text>
 
-      <View style={styles.footer}>
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Grand Total</Text>
-          <Text style={styles.totalAmount}>₹{grandTotal}</Text>
+        <View style={styles.card}>
+          {selectedServices.map((service) => (
+            <View key={service.id} style={styles.row}>
+              <Text style={styles.serviceTitle}>{service.title}</Text>
+              <Text style={styles.servicePrice}>₹{service.price}</Text>
+            </View>
+          ))}
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Type:</Text>
+            <Text style={styles.infoValue}>{params.serviceType?.toUpperCase()}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Date & Time:</Text>
+            <Text style={styles.infoValue}>{params.date || "Not Selected"}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Location:</Text>
+            <Text style={styles.infoValue} numberOfLines={2}>
+              {params.addressText}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.row}>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalValue}>₹{getTotalPrice()}</Text>
+          </View>
         </View>
-
-        <TouchableOpacity style={styles.payBtn} onPress={handleMakePayment} activeOpacity={0.8}>
-          <Text style={styles.btnText}>Make Payment (₹{grandTotal})</Text>
-        </TouchableOpacity>
       </View>
-    </View>
+
+      <TouchableOpacity
+        style={styles.confirmBtn}
+        onPress={handleConfirmBooking}
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? (
+          <ActivityIndicator color="#FFF" />
+        ) : (
+          <Text style={styles.confirmBtnText}>Confirm & Book</Text>
+        )}
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFF", paddingTop: 20 },
-  scrollContent: { paddingBottom: 140 },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    backgroundColor: "#FFF",
-    borderTopWidth: 1,
-    borderColor: Colors.border || "#E5E7EB",
+  container: { flex: 1, backgroundColor: Colors.background, padding: 16 },
+  content: { flex: 1 },
+  title: { fontSize: 24, fontWeight: "bold", color: Colors.text, marginBottom: 20 },
+  card: {
+    backgroundColor: Colors.surface,
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  totalLabel: {
+  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
+  infoRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  infoLabel: { fontSize: 14, color: Colors.textSecondary },
+  infoValue: {
     fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "600",
+    color: Colors.text,
+    fontWeight: "500",
+    maxWidth: "60%",
+    textAlign: "right",
   },
-  totalAmount: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: Colors.text || "#111827",
-  },
-  payBtn: {
-    backgroundColor: "#16A34A",
-    paddingVertical: 14,
+  serviceTitle: { fontSize: 16, color: Colors.textSecondary },
+  servicePrice: { fontSize: 16, color: Colors.text, fontWeight: "600" },
+  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
+  totalLabel: { fontSize: 18, fontWeight: "bold", color: Colors.text },
+  totalValue: { fontSize: 20, fontWeight: "900", color: Colors.primary },
+  confirmBtn: {
+    backgroundColor: Colors.primary,
+    padding: 16,
     borderRadius: 12,
     alignItems: "center",
+    marginBottom: 20,
   },
-  btnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+  confirmBtnText: { color: "#FFF", fontSize: 18, fontWeight: "bold" },
 });

@@ -1,10 +1,19 @@
 import Colors from "@/constants/colors";
 import useUser from "@/context/userContext";
+import { supabase } from "@/utils/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export interface Booking {
   id: string;
@@ -23,23 +32,54 @@ export default function BookingTabs() {
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Load bookings from AsyncStorage on mount and screen focus/update
+  // 🚀 Fetch Bookings directly from Supabase
   useEffect(() => {
-    const loadBookings = async () => {
-      try {
-        const storedBookings = await AsyncStorage.getItem("user_bookings");
-        if (storedBookings) {
-          setBookings(JSON.parse(storedBookings));
-        }
-      } catch (error) {
-        console.log("Failed to load bookings", error);
-      }
-    };
-    loadBookings();
-  }, [userData]);
+    fetchSupabaseBookings();
+  }, []);
 
-  // Cancel Booking Handler
+  const fetchSupabaseBookings = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("user_id", "test_user_aman") // Testing ID
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        // Supabase data ko Booking interface ke format mein map kar rahe hain
+        const formattedBookings: Booking[] = data.map((item: any) => {
+          const firstService = item.services_booked?.[0] || {
+            title: "Car Service",
+            price: item.total_amount,
+          };
+          const isCancelled = item.status === "Cancelled";
+
+          return {
+            id: item.id,
+            title: firstService.title,
+            price: `₹${item.total_amount}`,
+            date: item.booking_date || "Scheduled Soon",
+            address: item.address || "Workshop Center",
+            status: item.status || "Pending",
+            type: isCancelled || item.status === "Completed" ? "past" : "upcoming",
+          };
+        });
+
+        setBookings(formattedBookings);
+      }
+    } catch (error) {
+      console.log("Failed to fetch bookings from Supabase", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cancel Booking Handler in Supabase
   const handleCancel = async (id: string) => {
     Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
       { text: "No", style: "cancel" },
@@ -47,14 +87,25 @@ export default function BookingTabs() {
         text: "Yes, Cancel",
         style: "destructive",
         onPress: async () => {
-          const updated = bookings.map((item) => {
-            if (item.id === id) {
-              return { ...item, status: "Cancelled" as const, type: "past" as const };
-            }
-            return item;
-          });
-          setBookings(updated);
-          await AsyncStorage.setItem("user_bookings", JSON.stringify(updated));
+          try {
+            const { error } = await supabase
+              .from("bookings")
+              .update({ status: "Cancelled" })
+              .eq("id", id);
+
+            if (error) throw error;
+
+            // Local state update
+            const updated = bookings.map((item) => {
+              if (item.id === id) {
+                return { ...item, status: "Cancelled" as const, type: "past" as const };
+              }
+              return item;
+            });
+            setBookings(updated);
+          } catch (err) {
+            Alert.alert("Error", "Could not cancel booking");
+          }
         },
       },
     ]);
@@ -68,30 +119,13 @@ export default function BookingTabs() {
     }
   });
 
-  // Testing ke liye local bookings clean karne ka function
-  // const clearAllBookings = async () => {
-  //   try {
-  //     await AsyncStorage.removeItem("user_bookings");
-  //     setBookings([]); // State bhi khali kar do
-  //     alert("All local bookings cleared!");
-  //   } catch (e) {
-  //     console.log("Failed to clear", e);
-  //   }
-  // };
-
   const renderBookingCard = ({ item }: { item: Booking }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Image
-          source={
-            item.image
-              ? typeof item.image === "string"
-                ? { uri: item.image }
-                : item.image
-              : {
-                  uri: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
-                }
-          }
+          source={{
+            uri: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
+          }}
           style={styles.cardImage}
           resizeMode="cover"
         />
@@ -174,7 +208,11 @@ export default function BookingTabs() {
         </TouchableOpacity>
       )}
 
-      {filteredBookings.length > 0 ? (
+      {loading ? (
+        <View style={styles.emptyBox}>
+          <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+        </View>
+      ) : filteredBookings.length > 0 ? (
         <FlatList
           data={filteredBookings}
           keyExtractor={(item) => item.id}
@@ -188,15 +226,6 @@ export default function BookingTabs() {
           <Text style={styles.emptyText}>No {activeTab} bookings found.</Text>
         </View>
       )}
-      {/* Remove local booking */}
-      {/* <TouchableOpacity
-        style={{ padding: 10, backgroundColor: "#EF4444", borderRadius: 8, marginVertical: 10 }}
-        onPress={clearAllBookings}
-      >
-        <Text style={{ color: "#FFF", textAlign: "center", fontWeight: "700" }}>
-          Clear Local Bookings (Test)
-        </Text>
-      </TouchableOpacity> */}
     </View>
   );
 }
