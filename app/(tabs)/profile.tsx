@@ -55,14 +55,12 @@ export default function ProfileScreen() {
   const [phoneInput, setPhoneInput] = useState("");
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
-  // 1. Fetch Profile, Vehicles, & Stats from Supabase
   const fetchUserData = useCallback(async () => {
     if (!user) return;
 
     try {
       setIsLoading(true);
 
-      // A. Fetch Extra Profile Data
       const { data: profileData } = await supabase
         .from("profiles")
         .select("phone, created_at")
@@ -73,7 +71,6 @@ export default function ProfileScreen() {
         setSupabaseProfile(profileData);
       }
 
-      // B. Fetch Vehicles Data
       const { data: vehicleData } = await supabase
         .from("vehicles")
         .select("id, make, model, vehicle_type, registration_number, image_url")
@@ -90,7 +87,6 @@ export default function ProfileScreen() {
         setVehicles(formattedVehicles);
       }
 
-      // C. Fetch Stats
       const { count: totalCount } = await supabase
         .from("bookings")
         .select("*", { count: "exact", head: true })
@@ -132,7 +128,6 @@ export default function ProfileScreen() {
     }
   }, [isClerkLoaded, user, fetchUserData]);
 
-  // 2. Save/Upsert Phone Number to Supabase
   const handleSavePhone = async () => {
     if (!user || !phoneInput.trim()) return;
 
@@ -165,14 +160,12 @@ export default function ProfileScreen() {
     }
   };
 
-  // 3. Format Date
   const formatMemberSince = (isoDate: string | null) => {
     if (!isoDate) return "New Member";
     const date = new Date(isoDate);
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   };
 
-  // 4. Logout Handler
   const handleLogout = async () => {
     Alert.alert("Logout", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
@@ -181,8 +174,7 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            // Pehle auth/login page par redirect karein
-            router.replace("/" as any); // Agar auth page app/index.tsx ya app/(auth) par hai
+            router.replace("/" as any); 
             await signOut();
           } catch (error) {
             console.error("Logout Error:", error);
@@ -192,7 +184,6 @@ export default function ProfileScreen() {
     ]);
   };
 
-  // 💡 GUARD: User sign-out hone par ya load hone ke dauran screen crash na ho
   if (!isClerkLoaded || !user) {
     return (
       <View style={[styles.container, styles.loadingCenter]}>
@@ -205,7 +196,6 @@ export default function ProfileScreen() {
     <View style={styles.container}>
       <SectionHeader title="Profile" />
 
-      {/* Screen Sub-Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Profile</Text>
         <TouchableOpacity
@@ -221,7 +211,6 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* User Card */}
         <UserInfoCard
           phone={supabaseProfile?.phone}
           onEditPress={() => router.push("/edit-profile" as any)}
@@ -230,20 +219,17 @@ export default function ProfileScreen() {
           onAddEmail={() => console.log("Add email — handled via Clerk")}
         />
 
-        {/* Membership Banner */}
         <MembershipBanner
           memberSince={formatMemberSince(supabaseProfile?.created_at ?? null)}
           onPressBanner={() => router.push("/membership" as any)}
         />
 
-        {/* My Vehicles Horizontal Section */}
         <MyVehiclesSection
           vehicles={vehicles}
           onAddCarPress={() => router.push("/add-vehicle" as any)}
           onCarPress={(car) => router.push(`/vehicle-details/${car.id}` as any)}
         />
 
-        {/* Profile Statistics Grid */}
         <ProfileStats
           totalBookings={stats.totalBookings}
           completed={stats.completed}
@@ -255,11 +241,9 @@ export default function ProfileScreen() {
           }}
         />
 
-        {/* Main Navigation Menu List */}
         <ProfileMenuList onLogoutPress={handleLogout} />
       </ScrollView>
 
-      {/* Add Phone Number Modal */}
       <Modal visible={isPhoneModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
