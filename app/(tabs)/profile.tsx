@@ -90,7 +90,7 @@ export default function ProfileScreen() {
         setVehicles(formattedVehicles);
       }
 
-      // C. Fetch Stats (Optional Bookings / Saved counts)
+      // C. Fetch Stats
       const { count: totalCount } = await supabase
         .from("bookings")
         .select("*", { count: "exact", head: true })
@@ -180,12 +180,26 @@ export default function ProfileScreen() {
         text: "Logout",
         style: "destructive",
         onPress: async () => {
-          await signOut();
-          router.replace("/auth");
+          try {
+            // Pehle auth/login page par redirect karein
+            router.replace("/" as any); // Agar auth page app/index.tsx ya app/(auth) par hai
+            await signOut();
+          } catch (error) {
+            console.error("Logout Error:", error);
+          }
         },
       },
     ]);
   };
+
+  // 💡 GUARD: User sign-out hone par ya load hone ke dauran screen crash na ho
+  if (!isClerkLoaded || !user) {
+    return (
+      <View style={[styles.container, styles.loadingCenter]}>
+        <ActivityIndicator size="large" color={Colors.primary || "#6366F1"} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -242,9 +256,7 @@ export default function ProfileScreen() {
         />
 
         {/* Main Navigation Menu List */}
-        <ProfileMenuList
-          onLogoutPress={handleLogout}
-        />
+        <ProfileMenuList onLogoutPress={handleLogout} />
       </ScrollView>
 
       {/* Add Phone Number Modal */}
@@ -297,6 +309,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background || "#F8FAFC",
+  },
+  loadingCenter: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
     flexDirection: "row",
