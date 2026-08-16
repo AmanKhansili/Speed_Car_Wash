@@ -2,8 +2,9 @@ import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
 import Shadow from "@/constants/shadow";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   ScrollView,
@@ -18,12 +19,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ServiceCard from "@/components/cards/ServiceCard";
 import SearchBar from "@/components/common/SearchBar";
 
-// DATA & ROUTING
-import { categoriesList, servicesData } from "@/constants/data";
 import { useBookingStore } from "@/store/bookingStore";
+import { supabase } from "@/utils/supabase"; // 🚀 Supabase instance import
 import { router } from "expo-router";
-
-// 🚀 ZUSTAND STORE IMPORT KARI
 
 const { width } = Dimensions.get("window");
 const cardWidth = (width - 48) / 2;
@@ -32,8 +30,53 @@ export default function ServicesScreen() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // 🚀 Dynamic Backend States
+  const [servicesData, setServicesData] = useState<any[]>([]);
+  const [categoriesList, setCategoriesList] = useState<string[]>(["All"]);
+  const [loading, setLoading] = useState(true);
+
   // 🚀 ZUSTAND STATE HOOKS
   const { selectedServices, addService, removeService, getTotalPrice } = useBookingStore();
+
+  // 🚀 Fetch Services from Supabase on Mount
+  useEffect(() => {
+    fetchServicesFromSupabase();
+  }, []);
+
+  const fetchServicesFromSupabase = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.from("services").select("*");
+
+      if (error) throw error;
+
+      if (data) {
+        // 🚀 PRICE-WISE SERIALIZATION (Low to High sorting)
+        const sortedData = data.sort((a: any, b: any) => {
+          // Price string "₹400" ya "₹1,400" ko clean karke number banate hain comparison ke liye
+          const priceA = parseInt(
+            typeof a.price === "string" ? a.price.replace(/[^\d]/g, "") : a.price,
+            10,
+          );
+          const priceB = parseInt(
+            typeof b.price === "string" ? b.price.replace(/[^\d]/g, "") : b.price,
+            10,
+          );
+          return priceA - priceB; // Low to High (Agar High to Low chahiye toh priceB - priceA kar dena)
+        });
+
+        setServicesData(sortedData);
+
+        // Extract unique categories dynamically
+        const uniqueCategories = ["All", ...new Set(sortedData.map((item: any) => item.category))];
+        setCategoriesList(uniqueCategories as string[]);
+      }
+    } catch (error) {
+      console.log("Error fetching services from Supabase:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Check karna ki service already selected hai ya nahi
   const isSelected = (id: string) => selectedServices.some((s) => s.id === id);
@@ -44,7 +87,11 @@ export default function ServicesScreen() {
       removeService(item.id);
     } else {
       // "₹599" string ko actual number (599) mein convert kar rahe hain calculations ke liye
-      const numericPrice = parseInt(item.price.replace(/[^\d]/g, ""), 10);
+      const numericPrice =
+        typeof item.price === "number"
+          ? item.price
+          : parseInt(item.price.replace(/[^\d]/g, ""), 10);
+
       addService({
         id: item.id,
         title: item.title,
@@ -95,36 +142,47 @@ export default function ServicesScreen() {
         </ScrollView>
       </View>
 
-      <FlatList
-        data={filteredServices}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={{ justifyContent: "space-between", marginBottom: 16 }}
-        renderItem={({ item }) => (
-          <View style={{ width: cardWidth }}>
-            <ServiceCard
-              title={item.title}
-              subtitle={item.subtitle}
-              price={item.price}
-              rating={item.rating}
-              reviews={item.reviews}
-              image={item.image}
-              style={{ width: "100%" }}
-              onPress={() => router.push(`/services/${item.id}` as any)}
-              isAdded={isSelected(item.id)}
-              onAddPress={() => toggleService(item)}
-            />
-          </View>
-        )}
-        ListEmptyComponent={() => (
-          <View style={{ alignItems: "center", marginTop: 40 }}>
-            <Ionicons name="search-outline" size={40} color={Colors.textLight} />
-            <Text style={{ marginTop: 12, color: Colors.textSecondary }}>No services found</Text>
-          </View>
-        )}
-      />
+      {loading ? (
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredServices}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          columnWrapperStyle={{ justifyContent: "space-between", marginBottom: 16 }}
+          renderItem={({ item }) => (
+            <View style={{ width: cardWidth }}>
+              <ServiceCard
+                title={item.title}
+                subtitle={item.subtitle}
+                price={typeof item.price === "number" ? `₹${item.price}` : item.price}
+                rating={item.rating || "4.8"}
+                reviews={item.reviews || "50+"}
+                // 🚀 Safe Image Handling: Agar item.image URL hai toh use karo, warna fallback image
+                image={
+                  item.image && item.image.startsWith("http")
+                    ? { uri: item.image }
+                    : require("@/assets/images/services/exterior.webp")
+                }
+                style={{ width: "100%" }}
+                onPress={() => router.push(`/services/${item.id}` as any)}
+                isAdded={isSelected(item.id)}
+                onAddPress={() => toggleService(item)}
+              />
+            </View>
+          )}
+          ListEmptyComponent={() => (
+            <View style={{ alignItems: "center", marginTop: 40 }}>
+              <Ionicons name="search-outline" size={40} color={Colors.textLight || "#94A3B8"} />
+              <Text style={{ marginTop: 12, color: Colors.textSecondary }}>No services found</Text>
+            </View>
+          )}
+        />
+      )}
 
       {/* 🚀 SMART FLOATING "GO TO BOOKING" BAR */}
       {selectedServices.length > 0 && (
@@ -135,7 +193,7 @@ export default function ServicesScreen() {
           </View>
           <TouchableOpacity
             style={styles.continueBtn}
-            onPress={() => router.push("/booking/step1-selection")}
+            onPress={() => router.push("/booking/step1-selection" as any)}
           >
             <Text style={styles.continueText}>Continue</Text>
             <Ionicons name="arrow-forward" size={18} color="#FFF" />
@@ -172,28 +230,12 @@ const styles = StyleSheet.create({
   activeCategoryPill: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   categoryText: { fontSize: 13, fontWeight: "600", color: Colors.textSecondary },
   activeCategoryText: { color: Colors.surface },
-  listContent: { paddingHorizontal: 16, paddingBottom: 140 }, // Padding badha di taaki list bar ke neeche na chhupe
-  columnWrapper: { justifyContent: "space-between" },
+  listContent: { paddingHorizontal: 16, paddingBottom: 140 },
+  centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  // 🚀 NEW STYLES FOR ADD BUTTON & FLOATING BAR
-  addBtn: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "rgba(0,0,0,0.4)", // Translucent black
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  selectedBtn: {
-    backgroundColor: Colors.primary, // Green jab select ho jaye
-  },
   floatingBar: {
     position: "absolute",
-    bottom: 90, // Tab bar ke theek upar
+    bottom: 90,
     left: 16,
     right: 16,
     backgroundColor: Colors.surface,
@@ -202,7 +244,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    ...Shadow.heavy, // Thodi shadow premium feel ke liye
+    ...Shadow.heavy,
     borderWidth: 1,
     borderColor: Colors.border,
   },

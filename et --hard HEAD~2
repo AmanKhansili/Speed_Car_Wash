@@ -1,0 +1,30 @@
+[33m933bafc[m[33m ([m[1;36mHEAD -> [m[1;32mbackend[m[33m)[m initial minor commit
+[33m1fe989c[m Merge pull request #3 from AmanKhansili/feature/login
+[33me192326[m[33m ([m[1;31morigin/feature/login[m[33m)[m Merge branch 'main' into feature/login
+[33mb6f13b7[m authentication profile page
+[33m4252c9c[m minor adjustments in popular services section also connected with booking
+[33m113c92f[m service page connected with booking, also implemented dynamic behaviour on booking page
+[33m9a0e506[m Merge branches 'main' and 'main' of https://github.com/AmanKhansili/Speed_Car_Wash
+[33m7839d65[m loginform added
+[33m19450ef[m Merge pull request #2 from AmanKhansili/feature/linkingroutes
+[33m2bc313c[m[33m ([m[1;31morigin/feature/linkingroutes[m[33m)[m profile page ui merge
+[33m0c04b86[m main merge into linking
+[33m0d743b2[m changes in location and address  input and some modification
+[33me9381e7[m Added service details, membership UI, live location and fixed routing
+[33mbbe6f99[m usercontext for centerlized data , current location
+[33m73b0147[m usercontext for centerlized data , current location
+[33m92acbc2[m added Membership plans and fixed routing
+[33ma9ef468[m[33m ([m[1;32mfeature/profile-page-ui[m[33m)[m initial updates
+[33m7aabc2f[m Merge pull request #1 from AmanKhansili/feature/profile-page-ui
+[33ma014e80[m Added dynamic service details page and fixed routing
+[33mff9f4fb[m Merge branch 'main' of https://github.com/AmanKhansili/Speed_Car_Wash into feature/profile-page-ui
+[33m5f53d77[m profile UI created
+[33mc6aab8a[m[33m ([m[1;32mtest/booking-merge[m[33m, [m[1;32mfeature/booking-page-ui[m[33m)[m Merge remote-tracking branch 'origin/feature/booking-page-ui' into test/booking-merge
+[33m8e10b9b[m[33m ([m[1;31morigin/feature/home-services[m[33m, [m[1;32mfeature/home-services[m[33m)[m unwanted comment removed
+[33m947d46c[m new home and service section created
+[33m863bf7f[m[33m ([m[1;31morigin/feature/booking-page-ui[m[33m)[m booking flow is migrated into wizard flow and seperate types added
+[33mc7c5a83[m booking tab and add booking page and there section are added created a SectionHeader for reuse
+[33m3ceeb45[m md updated
+[33meba10dc[m initial commit
+[33m8287edf[m first commit
+[33m0d81bcb[m Initial commit

@@ -1,23 +1,22 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-} from "react-native";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import Colors from "@/constants/colors";
 import { Address, AddressSelectorProps } from "@/types/service";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-export const SAVED_ADDRESSES: Address[] = [
-];
+export const SAVED_ADDRESSES: Address[] = [];
 
 export default function AddressSelector({
   selectedAddressId,
@@ -28,7 +27,7 @@ export default function AddressSelector({
   const [isLocating, setIsLocating] = useState(false);
 
   const [tag, setTag] = useState<"Home" | "Work" | "Other">("Home");
-  const [addressLine1, setAddressLine1] = useState("");
+  const [address, setaddress] = useState("");
   const [landmark, setLandmark] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
@@ -40,7 +39,10 @@ export default function AddressSelector({
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== "granted") {
-        Alert.alert("Permission Denied", "Location permission is required to fetch current location.");
+        Alert.alert(
+          "Permission Denied",
+          "Location permission is required to fetch current location.",
+        );
         setIsLocating(false);
         return;
       }
@@ -57,7 +59,7 @@ export default function AddressSelector({
         const item = geocode[0];
         const line1 = [item.formattedAddress].filter(Boolean).join(", ");
 
-        setAddressLine1(line1 || "Current Location");
+        setaddress(line1 || "Current Location");
         setLatitude(lat);
         setLongitude(lng);
         setIsModalVisible(true);
@@ -71,7 +73,7 @@ export default function AddressSelector({
 
   // 2. Save New Address
   const handleSaveAddress = () => {
-    if (!addressLine1.trim()) {
+    if (!address.trim()) {
       Alert.alert("Missing Details", "Please fill Address Line 1.");
       return;
     }
@@ -79,17 +81,17 @@ export default function AddressSelector({
     const newAddress: Address = {
       id: Date.now().toString(),
       tag,
-      addressLine1,
+      address,
       landmark: landmark.trim() || undefined,
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
     };
 
     setAddresses((prev) => [newAddress, ...prev]);
-    onSelectAddress(newAddress.id);
+    onSelectAddress(newAddress.id, newAddress.address);
 
     // Reset & Close Modal
-    setAddressLine1("");
+    setaddress("");
     setLandmark("");
     setTag("Home");
     setLatitude(null);
@@ -99,9 +101,12 @@ export default function AddressSelector({
 
   const getTagIcon = (tagType?: string) => {
     switch (tagType) {
-      case "Home": return "home-outline";
-      case "Work": return "briefcase-outline";
-      default: return "location-outline";
+      case "Home":
+        return "home-outline";
+      case "Work":
+        return "briefcase-outline";
+      default:
+        return "location-outline";
     }
   };
 
@@ -151,7 +156,7 @@ export default function AddressSelector({
               key={item.id}
               activeOpacity={0.85}
               style={[styles.addressCard, isSelected && styles.selectedAddressCard]}
-              onPress={() => onSelectAddress(item.id)}
+              onPress={() => onSelectAddress(item.id, item.address)}
             >
               <View style={styles.cardHeader}>
                 <View style={styles.tagWrapper}>
@@ -171,7 +176,7 @@ export default function AddressSelector({
                 </View>
               </View>
 
-              <Text style={styles.addressLine1}>{item.addressLine1}</Text>
+              <Text style={styles.address}>{item.address}</Text>
 
               {item.landmark && (
                 <View style={styles.landmarkWrapper}>
@@ -213,13 +218,13 @@ export default function AddressSelector({
               </View>
 
               {/* Address Line 1 - Textarea (multiline) */}
-              <Text style={styles.inputLabel}>Address Line 1 *</Text>
+              <Text style={styles.inputLabel}>Address*</Text>
               <TextInput
                 style={styles.textArea}
                 placeholder="House/Flat No, Building, Street, Area"
                 placeholderTextColor="#9CA3AF"
-                value={addressLine1}
-                onChangeText={setAddressLine1}
+                value={address}
+                onChangeText={setaddress}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
@@ -323,7 +328,7 @@ const styles = StyleSheet.create({
   },
   radioOuterSelected: { borderColor: Colors.primary },
   radioInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary },
-  addressLine1: { fontSize: 14, fontWeight: "700", color: "#111827" },
+  address: { fontSize: 14, fontWeight: "700", color: "#111827" },
   addressLine2: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2 },
   landmarkWrapper: { flexDirection: "row", alignItems: "center", marginTop: 6, gap: 4 },
   landmarkText: { fontSize: 11.5, color: Colors.textSecondary, fontStyle: "italic" },

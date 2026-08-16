@@ -34,7 +34,7 @@ const POPULAR_SERVICES = [
     rating: "4.7",
     reviews: "124",
     tag: "Popular",
-    image: require("@/assets/images/services/exterior.png"),
+    image: require("@/assets/images/services/exterior.webp"),
   },
   {
     id: "pop_2",
@@ -44,7 +44,7 @@ const POPULAR_SERVICES = [
     rating: "4.9",
     reviews: "56",
     tag: "Popular",
-    image: require("@/assets/images/services/interior.png"),
+    image: require("@/assets/images/services/interior.webp"),
   },
   {
     id: "pop_3",
@@ -54,7 +54,7 @@ const POPULAR_SERVICES = [
     rating: "5.0",
     reviews: "34",
     tag: "Popular",
-    image: require("@/assets/images/services/ceramic.png"),
+    image: require("@/assets/images/services/ceramic.webp"),
   },
   {
     id: "pop_4",
@@ -64,7 +64,7 @@ const POPULAR_SERVICES = [
     rating: "4.8",
     reviews: "75",
     tag: "Popular",
-    image: require("@/assets/images/services/detailing.png"),
+    image: require("@/assets/images/services/detailing.webp"),
   },
 ];
 
