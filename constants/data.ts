@@ -7,7 +7,7 @@ export const servicesData = [
     rating: "4.7",
     reviews: "124",
     category: "Wash",
-    image: require("@/assets/images/services/exterior.png"),
+    image: require("@/assets/images/services/exterior.webp"),
     description:
       "Complete vacuuming (seats & boot) + Foot mats cleaning + Body shampooing & door frames + Tyre arches cleaning + Underbody wash + Engine hot water wash & dressing + Side doors cleaning + Dashboard polishing + Premium car perfume spray",
   },

@@ -166,7 +166,7 @@ export default function ServicesScreen() {
                 image={
                   item.image && item.image.startsWith("http")
                     ? { uri: item.image }
-                    : require("@/assets/images/services/exterior.png")
+                    : require("@/assets/images/services/exterior.webp")
                 }
                 style={{ width: "100%" }}
                 onPress={() => router.push(`/services/${item.id}` as any)}

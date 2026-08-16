@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/logo/logo.png"
+        "foregroundImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -41,7 +41,18 @@
       "@react-native-community/datetimepicker",
       "@clerk/expo",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "extraProguardRules": "-keepattributes *Annotation*\n-dontwarn com.razorpay.**\n-keep class com.razorpay.** {*;}\n-optimizations !method/inlining/\n-keepclasseswithmembers class * { public void onPayment*(...); }"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -50,8 +61,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "9ebd2ade-5bb5-4355-b9c5-2bda709fe7fe"
+        "projectId": "c8e930d0-eda6-454d-a5c9-11b62945e23d"
       }
-    }
+    },
+    "owner": "amankhansili"
   }
 }

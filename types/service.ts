@@ -33,15 +33,15 @@ export interface PaymentSummaryProps {
 export interface Address {
   id: string;
   tag: "Home" | "Work" | "Other";
-  addressLine1: string;
+  address: string;
   landmark?: string;
-  latitude?: number,
-  longitude?:number,
+  latitude?: number;
+  longitude?: number;
   isDefault?: boolean;
 }
 
 export interface AddressSelectorProps {
   selectedAddressId: string;
-  onSelectAddress: (id: string) => void;
+  onSelectAddress: (id: string, fullAddressString: string) => void;
   onAddNewAddress?: () => void;
 }
