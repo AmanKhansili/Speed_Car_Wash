@@ -49,7 +49,7 @@
         {
           "android": {
             "minSdkVersion": 24,
-            "compileSdkVersion": 34,
+            "compileSdkVersion": 36,
             "targetSdkVersion": 34,
             "extraProguardRules": "-keepattributes *Annotation*\n-dontwarn com.razorpay.**\n-keep class com.razorpay.** {*;}\n-optimizations !method/inlining/\n-keepclasseswithmembers class * { public void onPayment*(...); }"
           }
