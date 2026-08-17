@@ -1,5 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { LocalUserData, UserLocation, Vehicle } from "@/types/user";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  ReactNode,
+  useCallback,
+} from "react";
+import { LocalUserData, UserLocation, Vehicle, NewVehicle } from "@/types/user";
 import {
   getLocalUserData,
   savePhoneLocally,
@@ -7,30 +15,31 @@ import {
   saveVehicleLocally,
   removeVehicleLocally,
   setSelectedVehicleLocally,
+  addVehicleWithSync,
 } from "@/utils/userStorage";
+import { createClerkSupabaseClient } from "@/utils/supabase";
 
-// 1. Context Type Interface
 interface UserContextType {
   userData: LocalUserData;
+  isLoaded: boolean;
   updatePhone: (phone: string) => Promise<void>;
   updateLocation: (loc: UserLocation) => Promise<void>;
+  addVehicle: (veh: NewVehicle) => Promise<Vehicle>;
   updateVehicle: (veh: Vehicle) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   selectVehicle: (id: string) => Promise<void>;
   syncWithDB: () => Promise<void>;
 }
 
-// 2. Props Interface
 interface UserProviderProps {
   children: ReactNode;
-  userId?: string;
+  userId?: string | null;
+  getToken?: () => Promise<string | null>;
 }
 
-// 3. Initial Context
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-// 4. Provider Component
-export const UserProvider = ({ children, userId }: UserProviderProps) => {
+export const UserProvider = ({ children, userId, getToken }: UserProviderProps) => {
   const [userData, setUserData] = useState<LocalUserData>({
     mobileNumber: "",
     location: null,
@@ -38,90 +47,121 @@ export const UserProvider = ({ children, userId }: UserProviderProps) => {
     selectedVehicleId: null,
     lastUpdated: Date.now(),
   });
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // App load par Local Storage se state fill karein
+  // Clerk session token wala Supabase client — memoized, taaki reuse ho
+  const clerkSupabase = useMemo(() => {
+    if (!getToken) return null;
+    return createClerkSupabaseClient(getToken);
+  }, [getToken]);
+
+  const syncWithDB = useCallback(async () => {
+    if (!userId || !clerkSupabase) return;
+
+    try {
+      const { data: dbVehicles, error } = await clerkSupabase
+        .from("vehicles")
+        .select("*")
+        .eq("clerk_user_id", userId);
+
+      if (error) throw error;
+
+      if (dbVehicles && dbVehicles.length > 0) {
+        const formattedVehicles: Vehicle[] = dbVehicles.map((item) => ({
+          id: item.id,
+          brand: item.make || item.brand || "Vehicle",
+          model: item.model || "",
+          category: item.vehicle_type || item.category || "Car",
+          registrationNumber: item.registration_number || "",
+        }));
+
+        const currentLocal = await getLocalUserData();
+        const updatedLocalData: LocalUserData = {
+          ...currentLocal,
+          vehicles: formattedVehicles,
+          selectedVehicleId: currentLocal.selectedVehicleId || formattedVehicles[0].id,
+          lastUpdated: Date.now(),
+        };
+
+        if (updatedLocalData.location) {
+          await saveLocationLocally(updatedLocalData.location);
+        }
+        setUserData(updatedLocalData);
+      }
+    } catch (error) {
+      console.warn("[UserContext] DB Sync failed, using cached storage:", error);
+    }
+  }, [userId, clerkSupabase]);
+
   useEffect(() => {
     const initData = async () => {
-      const data = await getLocalUserData();
-      setUserData(data);
+      try {
+        const data = await getLocalUserData();
+        setUserData(data);
+      } catch (err) {
+        console.error("[UserContext] Initialization error:", err);
+      } finally {
+        setIsLoaded(true);
+      }
     };
+
     initData();
   }, []);
 
-  // Backend Sync Logic
-  const syncWithDB = async () => {
-    if (!userId) return;
-
-    try {
-      await fetch("https://your-api-domain.com/api/user/sync-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          mobileNumber: userData.mobileNumber,
-          location: userData.location,
-          vehicles: userData.vehicles,
-        }),
-      });
-    } catch (error) {
-      console.error("DB Sync failed, kept in local storage:", error);
+  useEffect(() => {
+    if (userId && isLoaded && clerkSupabase) {
+      syncWithDB();
     }
-  };
+  }, [userId, isLoaded, clerkSupabase, syncWithDB]);
 
-  // Handlers
   const updatePhone = async (phone: string) => {
     const updated = await savePhoneLocally(phone);
     setUserData(updated);
-    await syncWithDB();
   };
 
   const updateLocation = async (location: UserLocation) => {
     const updated = await saveLocationLocally(location);
     setUserData(updated);
-    await syncWithDB();
+  };
+
+  const addVehicle = async (newVehicle: NewVehicle): Promise<Vehicle> => {
+    if (!userId) {
+      throw new Error("User not authenticated. Please sign in to add a vehicle.");
+    }
+    if (!clerkSupabase) {
+      throw new Error("Auth session not ready yet. Please try again in a moment.");
+    }
+
+    const { vehicle: createdVehicle, userData: updatedLocalData } =
+      await addVehicleWithSync(newVehicle, userId, clerkSupabase);
+
+    setUserData(updatedLocalData);
+    return createdVehicle;
   };
 
   const updateVehicle = async (vehicle: Vehicle) => {
     const updated = await saveVehicleLocally(vehicle);
     setUserData(updated);
-    await syncWithDB();
   };
 
   const deleteVehicle = async (id: string) => {
-    if (removeVehicleLocally) {
-      const updated = await removeVehicleLocally(id);
-      setUserData(updated);
-      await syncWithDB();
-    } else {
-      // Fallback in-memory update agar storage helper custom na ho
-      const updatedVehicles = userData.vehicles.filter((v) => v.id !== id);
-      setUserData((prev) => ({
-        ...prev,
-        vehicles: updatedVehicles,
-        selectedVehicleId: prev.selectedVehicleId === id ? null : prev.selectedVehicleId,
-      }));
-    }
+    const updated = await removeVehicleLocally(id, true, clerkSupabase ?? undefined);
+    setUserData(updated);
   };
 
   const selectVehicle = async (id: string) => {
-    if (setSelectedVehicleLocally) {
-      const updated = await setSelectedVehicleLocally(id);
-      setUserData(updated);
-    } else {
-      // Fallback in-memory update
-      setUserData((prev) => ({
-        ...prev,
-        selectedVehicleId: id,
-      }));
-    }
+    const updated = await setSelectedVehicleLocally(id);
+    setUserData(updated);
   };
 
   return (
     <UserContext.Provider
       value={{
         userData,
+        isLoaded,
         updatePhone,
         updateLocation,
+        addVehicle,
         updateVehicle,
         deleteVehicle,
         selectVehicle,
@@ -133,11 +173,10 @@ export const UserProvider = ({ children, userId }: UserProviderProps) => {
   );
 };
 
-
-export default function useUser(): UserContextType{
+export default function useUser(): UserContextType {
   const context = useContext(UserContext);
   if (!context) {
     throw new Error("useUser must be used within a UserProvider");
   }
   return context;
-};
+}

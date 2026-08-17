@@ -1,33 +1,60 @@
 import React, { useState, useEffect } from "react";
-import { View, ScrollView, StyleSheet, Alert, Text, TouchableOpacity } from "react-native";
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
-import  useUser  from "@/context/userContext"; 
+import { useAuth } from "@clerk/expo";
+import useUser from "@/context/userContext";
 import VehicleSelector from "@/components/booking/VehicleSelector";
 import ServiceSelector from "@/components/booking/ServiceSelector";
 import Colors from "@/constants/colors";
 
 export default function Step1SelectionScreen() {
   const router = useRouter();
+  const { userId, isLoaded, isSignedIn } = useAuth();
   const { userData, selectVehicle } = useUser();
 
   const [selectedVehicle, setSelectedVehicle] = useState<string>(
-    userData.selectedVehicleId || (userData.vehicles?.[0]?.id || "")
+    userData?.selectedVehicleId || (userData?.vehicles?.[0]?.id || "")
   );
-  
+
   const [selectedService, setSelectedService] = useState<string>("");
 
+  // Sync selected vehicle when vehicles load in user context
   useEffect(() => {
-    if (!selectedVehicle && userData.vehicles.length > 0) {
+    if (!selectedVehicle && userData?.vehicles && userData.vehicles.length > 0) {
       setSelectedVehicle(userData.vehicles[0].id);
     }
-  }, [userData.vehicles]);
+  }, [userData?.vehicles]);
 
   const handleVehicleSelect = (id: string) => {
     setSelectedVehicle(id);
-    selectVehicle(id); 
+    selectVehicle(id);
   };
 
   const handleContinue = () => {
+    // 1. Auth check before moving to step 2
+    if (!userId || !isSignedIn) {
+      Alert.alert(
+        "Session Expired",
+        "Aapka login session active nahi hai. Kripya dobara login karein.",
+        [
+          {
+            text: "Login",
+            onPress: () => router.replace("/" as any),
+          },
+        ]
+      );
+      return;
+    }
+
+    // 2. Selection validation
     if (!selectedVehicle || !selectedService) {
       Alert.alert(
         "Selection Required",
@@ -35,15 +62,40 @@ export default function Step1SelectionScreen() {
       );
       return;
     }
+
     router.push({
       pathname: "/booking/step2-datetime",
       params: { vehicleId: selectedVehicle, serviceId: selectedService },
     });
   };
 
+  // Wait until Clerk finishes loading session from storage
+  if (!isLoaded) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+      </View>
+    );
+  }
+
+  // Handle case where user opens screen without being logged in
+  if (!isSignedIn || !userId) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.errorText}>Please log in to make a booking.</Text>
+        <TouchableOpacity
+          style={styles.loginBtn}
+          onPress={() => router.replace("/" as any)}
+        >
+          <Text style={styles.loginBtnText}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -75,11 +127,16 @@ export default function Step1SelectionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
-  scrollContent: { 
+  center: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  scrollContent: {
     padding: 16,
     paddingBottom: 100,
   },
@@ -113,5 +170,20 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#64748B",
+    marginBottom: 16,
+  },
+  loginBtn: {
+    backgroundColor: Colors.primary || "#2563EB",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+  },
+  loginBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 });

@@ -6,5 +6,8 @@
   },
   "files.exclude": {
     "**/node_modules": true
-  }
+  },
+  "deno.enable": true,
+  "deno.enablePaths": ["supabase/functions"],
+  "deno.importMap": null
 }

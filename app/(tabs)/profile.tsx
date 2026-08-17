@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,12 +11,11 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useUser, useClerk } from "@clerk/expo";
 import { supabase } from "@/utils/supabase";
 
 import Colors from "@/constants/colors";
-import SectionHeader from "@/components/common/SectionHeader";
 import UserInfoCard from "@/components/profile/userInfoCard";
 import MembershipBanner from "@/components/profile/MembershipBanner";
 import ProfileStats from "@/components/profile/ProfileStats";
@@ -61,6 +60,7 @@ export default function ProfileScreen() {
     try {
       setIsLoading(true);
 
+      // 1. Profile Data
       const { data: profileData } = await supabase
         .from("profiles")
         .select("phone, created_at")
@@ -71,6 +71,7 @@ export default function ProfileScreen() {
         setSupabaseProfile(profileData);
       }
 
+      // 2. Vehicles
       const { data: vehicleData } = await supabase
         .from("vehicles")
         .select("id, make, model, vehicle_type, registration_number, image_url")
@@ -87,27 +88,28 @@ export default function ProfileScreen() {
         setVehicles(formattedVehicles);
       }
 
+      // 3. Booking Stats (Using clerk_user_id to maintain database consistency)
       const { count: totalCount } = await supabase
         .from("bookings")
         .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
+        .eq("clerk_user_id", user.id);
 
       const { count: completedCount } = await supabase
         .from("bookings")
         .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
+        .eq("clerk_user_id", user.id)
         .eq("status", "completed");
 
       const { count: upcomingCount } = await supabase
         .from("bookings")
         .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("status", "upcoming");
+        .eq("clerk_user_id", user.id)
+        .in("status", ["upcoming", "pending", "confirmed"]);
 
       const { count: savedCount } = await supabase
         .from("saved_services")
         .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
+        .eq("clerk_user_id", user.id);
 
       setStats({
         totalBookings: totalCount || 0,
@@ -122,11 +124,14 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (isClerkLoaded && user) {
-      fetchUserData();
-    }
-  }, [isClerkLoaded, user, fetchUserData]);
+  // Refresh profile details every time screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isClerkLoaded && user) {
+        fetchUserData();
+      }
+    }, [isClerkLoaded, user, fetchUserData])
+  );
 
   const handleSavePhone = async () => {
     if (!user || !phoneInput.trim()) return;
@@ -174,7 +179,7 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            router.replace("/" as any); 
+            router.replace("/" as any);
             await signOut();
           } catch (error) {
             console.error("Logout Error:", error);
@@ -184,18 +189,17 @@ export default function ProfileScreen() {
     ]);
   };
 
-  if (!isClerkLoaded || !user) {
+  if (!isClerkLoaded || isLoading) {
     return (
       <View style={[styles.container, styles.loadingCenter]}>
-        <ActivityIndicator size="large" color={Colors.primary || "#6366F1"} />
+        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <SectionHeader title="Profile" />
-
+      {/* Header Bar */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Profile</Text>
         <TouchableOpacity
@@ -216,7 +220,7 @@ export default function ProfileScreen() {
           onEditPress={() => router.push("/edit-profile" as any)}
           onChangeAvatar={() => console.log("Open Avatar Picker")}
           onAddPhone={() => setIsPhoneModalVisible(true)}
-          onAddEmail={() => console.log("Add email — handled via Clerk")}
+          onAddEmail={() => console.log("Handled via Clerk")}
         />
 
         <MembershipBanner
@@ -237,13 +241,14 @@ export default function ProfileScreen() {
           savedServices={stats.savedServices}
           onStatPress={(type) => {
             if (type === "saved") router.push("/saved-services" as any);
-            else router.push("/bookings" as any);
+            else router.push("/(tabs)/bookings" as any);
           }}
         />
 
         <ProfileMenuList onLogoutPress={handleLogout} />
       </ScrollView>
 
+      {/* Phone Number Modal */}
       <Modal visible={isPhoneModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -303,7 +308,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    height: 52,
+    height: 56,
     backgroundColor: Colors.surface || "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: Colors.border || "#F1F5F9",
@@ -375,7 +380,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.primary || "#6366F1",
+    backgroundColor: Colors.primary || "#2563EB",
   },
   modalSaveText: {
     fontWeight: "700",
