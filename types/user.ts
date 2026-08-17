@@ -11,8 +11,11 @@ export interface Vehicle {
   id: string;
   model: string;
   brand: string;
+  category: string;
   registrationNumber: string;
 }
+
+export type NewVehicle = Omit<Vehicle, "id">;
 
 export interface LocalUserData {
   mobileNumber: string;

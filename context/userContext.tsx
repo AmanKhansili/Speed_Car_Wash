@@ -6,6 +6,7 @@ import {
   savePhoneLocally,
   saveVehicleLocally,
   setSelectedVehicleLocally,
+  addVehicleWithSync,
 } from "@/utils/userStorage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
@@ -15,6 +16,7 @@ interface UserContextType {
   userData: LocalUserData & { bookings?: any[] };
   updatePhone: (phone: string) => Promise<void>;
   updateLocation: (loc: UserLocation) => Promise<void>;
+  addVehicle: (veh: NewVehicle) => Promise<Vehicle>;
   updateVehicle: (veh: Vehicle) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   selectVehicle: (id: string) => Promise<void>;
@@ -22,13 +24,12 @@ interface UserContextType {
   syncWithDB: () => Promise<void>;
 }
 
-// 2. Props Interface
 interface UserProviderProps {
   children: ReactNode;
-  userId?: string;
+  userId?: string | null;
+  getToken?: () => Promise<string | null>;
 }
 
-// 3. Initial Context
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 // 4. Provider Component
@@ -41,6 +42,51 @@ export const UserProvider = ({ children, userId }: UserProviderProps) => {
     lastUpdated: Date.now(),
     bookings: [],
   });
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  // Clerk session token wala Supabase client — memoized, taaki reuse ho
+  const clerkSupabase = useMemo(() => {
+    if (!getToken) return null;
+    return createClerkSupabaseClient(getToken);
+  }, [getToken]);
+
+  const syncWithDB = useCallback(async () => {
+    if (!userId || !clerkSupabase) return;
+
+    try {
+      const { data: dbVehicles, error } = await clerkSupabase
+        .from("vehicles")
+        .select("*")
+        .eq("clerk_user_id", userId);
+
+      if (error) throw error;
+
+      if (dbVehicles && dbVehicles.length > 0) {
+        const formattedVehicles: Vehicle[] = dbVehicles.map((item) => ({
+          id: item.id,
+          brand: item.make || item.brand || "Vehicle",
+          model: item.model || "",
+          category: item.vehicle_type || item.category || "Car",
+          registrationNumber: item.registration_number || "",
+        }));
+
+        const currentLocal = await getLocalUserData();
+        const updatedLocalData: LocalUserData = {
+          ...currentLocal,
+          vehicles: formattedVehicles,
+          selectedVehicleId: currentLocal.selectedVehicleId || formattedVehicles[0].id,
+          lastUpdated: Date.now(),
+        };
+
+        if (updatedLocalData.location) {
+          await saveLocationLocally(updatedLocalData.location);
+        }
+        setUserData(updatedLocalData);
+      }
+    } catch (error) {
+      console.warn("[UserContext] DB Sync failed, using cached storage:", error);
+    }
+  }, [userId, clerkSupabase]);
 
   // App load par Local Storage se state aur bookings fill karein
   useEffect(() => {
@@ -54,30 +100,16 @@ export const UserProvider = ({ children, userId }: UserProviderProps) => {
         bookings: parsedBookings,
       });
     };
+
     initData();
   }, []);
 
-  // Backend Sync Logic
-  const syncWithDB = async () => {
-    if (!userId) return;
-
-    try {
-      await fetch("https://your-api-domain.com/api/user/sync-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          mobileNumber: userData.mobileNumber,
-          location: userData.location,
-          vehicles: userData.vehicles,
-        }),
-      });
-    } catch (error) {
-      console.error("DB Sync failed, kept in local storage:", error);
+  useEffect(() => {
+    if (userId && isLoaded && clerkSupabase) {
+      syncWithDB();
     }
-  };
+  }, [userId, isLoaded, clerkSupabase, syncWithDB]);
 
-  // Handlers
   const updatePhone = async (phone: string) => {
     const updated = await savePhoneLocally(phone);
     setUserData((prev) => ({ ...prev, ...updated }));
@@ -140,8 +172,10 @@ export const UserProvider = ({ children, userId }: UserProviderProps) => {
     <UserContext.Provider
       value={{
         userData,
+        isLoaded,
         updatePhone,
         updateLocation,
+        addVehicle,
         updateVehicle,
         deleteVehicle,
         selectVehicle,

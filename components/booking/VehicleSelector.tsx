@@ -8,18 +8,13 @@ import {
   TextInput,
   FlatList,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
 import Colors from "@/constants/colors";
 import { INDIAN_CAR_DATA } from "@/constants/indianCars";
-
-export interface Vehicle {
-  id: string;
-  model: string;
-  brand: string;
-  category: string;
-  registrationNumber: string;
-}
+import useUser from "@/context/userContext";
 
 interface VehicleSelectorProps {
   selectedVehicleId: string;
@@ -39,12 +34,15 @@ export default function VehicleSelector({
   selectedVehicleId,
   onSelectVehicle,
 }: VehicleSelectorProps) {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const { userId, isSignedIn } = useAuth();
+  const { userData, addVehicle } = useUser();
+  const vehicles = userData?.vehicles || [];
 
   // Modal & Search States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isManualEntry, setIsManualEntry] = useState(false); // 👈 Toggle Manual Entry Form
+  const [isManualEntry, setIsManualEntry] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Selected or Manual Form State
   const [brandName, setBrandName] = useState("");
@@ -75,28 +73,43 @@ export default function VehicleSelector({
     setRegNumber("");
     setSearchQuery("");
     setIsManualEntry(false);
+    setIsSaving(false);
     setIsModalOpen(false);
   };
 
   // Save Vehicle Handler
-  const handleAddVehicle = () => {
-    if (!brandName.trim() || !modelName.trim()) {
-      Alert.alert("Required Fields", "Please enter/select both Car Brand and Model.");
+  const handleAddVehicle = async () => {
+    if (!isSignedIn || !userId) {
+      Alert.alert("Authentication Required", "Please sign in to add a new vehicle.");
       return;
     }
 
-    const newVehicle: Vehicle = {
-      id: Date.now().toString(),
-      model: modelName.trim(),
-      brand: brandName.trim(),
-      category: category,
-      registrationNumber: regNumber.trim() ? regNumber.trim().toUpperCase() : "NOT SPECIFIED",
-    };
+    if (!brandName.trim() || !modelName.trim()) {
+      Alert.alert("Required Fields", "Please enter or select both Car Brand and Model.");
+      return;
+    }
 
-    const updatedList = [...vehicles, newVehicle];
-    setVehicles(updatedList);
-    onSelectVehicle(newVehicle.id);
-    resetForm();
+    setIsSaving(true);
+
+    try {
+      // Supabase Insert via User Context
+      const createdVehicle = await addVehicle({
+        model: modelName.trim(),
+        brand: brandName.trim(),
+        category: category,
+        registrationNumber: regNumber.trim() ? regNumber.trim().toUpperCase() : "NOT SPECIFIED",
+      });
+
+      if (createdVehicle && createdVehicle.id) {
+        onSelectVehicle(createdVehicle.id);
+      }
+      resetForm();
+    } catch (error: any) {
+      console.error("Error adding vehicle:", error);
+      Alert.alert("Error", error.message || "Could not save vehicle. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -131,8 +144,11 @@ export default function VehicleSelector({
         </View>
       ) : (
         <View style={styles.listContainer}>
-          {vehicles.map((item) => {
+          {vehicles.map((item: any) => {
             const isSelected = item.id === selectedVehicleId;
+            const regNum = item.registrationNumber || item.registration_number || "NOT SPECIFIED";
+            const carCategory = item.category || item.vehicle_type || "Car";
+
             return (
               <TouchableOpacity
                 key={item.id}
@@ -147,9 +163,9 @@ export default function VehicleSelector({
                     color={isSelected ? Colors.primary || "#2563EB" : "#6B7280"}
                   />
                   <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.modelText}>{item.model}</Text>
+                    <Text style={styles.modelText}>{item.model || item.name}</Text>
                     <Text style={styles.brandText}>
-                      {item.brand} • <Text style={styles.categoryText}>{item.category}</Text>
+                      {item.brand || "Vehicle"} • <Text style={styles.categoryText}>{carCategory}</Text>
                     </Text>
                   </View>
                   <View
@@ -159,9 +175,9 @@ export default function VehicleSelector({
                   </View>
                 </View>
 
-                {item.registrationNumber !== "NOT SPECIFIED" && (
+                {regNum !== "NOT SPECIFIED" && (
                   <View style={styles.regBadge}>
-                    <Text style={styles.regText}>{item.registrationNumber}</Text>
+                    <Text style={styles.regText}>{regNum}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -184,7 +200,7 @@ export default function VehicleSelector({
               <Text style={styles.modalTitle}>
                 {isManualEntry ? "Enter Custom Car Details" : "Add New Vehicle"}
               </Text>
-              <TouchableOpacity onPress={resetForm}>
+              <TouchableOpacity onPress={resetForm} disabled={isSaving}>
                 <Ionicons name="close" size={24} color="#374151" />
               </TouchableOpacity>
             </View>
@@ -221,7 +237,7 @@ export default function VehicleSelector({
                 {/* Search Results List */}
                 <FlatList
                   data={filteredModels}
-                  keyExtractor={(item) => item.id}
+                  keyExtractor={(item, index) => `${item.brand}-${item.name}-${index}`}
                   style={{ maxHeight: 180 }}
                   nestedScrollEnabled
                   renderItem={({ item }) => {
@@ -256,13 +272,12 @@ export default function VehicleSelector({
                   }
                 />
 
-                {/* Always Show Option to Type Manually */}
                 <TouchableOpacity
                   style={styles.manualLinkBtn}
                   onPress={() => setIsManualEntry(true)}
                 >
                   <Ionicons name="create-outline" size={16} color={Colors.primary || "#2563EB"} />
-                  <Text style={styles.manualLinkText}>Can&lsquo;t find your car? Type manually</Text>
+                  <Text style={styles.manualLinkText}>Can&apos;t find your car? Type manually</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -276,7 +291,6 @@ export default function VehicleSelector({
                   <Text style={styles.backToSearchText}>Back to search list</Text>
                 </TouchableOpacity>
 
-                {/* Brand Name Input */}
                 <Text style={styles.inputLabel}>Car Brand (Company):</Text>
                 <TextInput
                   style={styles.textInput}
@@ -286,7 +300,6 @@ export default function VehicleSelector({
                   placeholderTextColor="#9CA3AF"
                 />
 
-                {/* Model Name Input */}
                 <Text style={styles.inputLabel}>Car Model Name:</Text>
                 <TextInput
                   style={styles.textInput}
@@ -296,7 +309,6 @@ export default function VehicleSelector({
                   placeholderTextColor="#9CA3AF"
                 />
 
-                {/* Category Selection Chips */}
                 <Text style={styles.inputLabel}>Car Category (for Wash Pricing):</Text>
                 <View style={styles.categoryChipsRow}>
                   {CATEGORIES.map((cat) => (
@@ -322,7 +334,7 @@ export default function VehicleSelector({
               </View>
             )}
 
-            {/* Vehicle Reg Number Input (Common for Both) */}
+            {/* Vehicle Reg Number Input */}
             <Text style={[styles.inputLabel, { marginTop: 12 }]}>
               Registration Number (Optional):
             </Text>
@@ -337,11 +349,16 @@ export default function VehicleSelector({
 
             {/* Save Button */}
             <TouchableOpacity
-              style={styles.saveBtn}
+              style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
               onPress={handleAddVehicle}
               activeOpacity={0.8}
+              disabled={isSaving}
             >
-              <Text style={styles.saveBtnText}>Save & Select Car</Text>
+              {isSaving ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.saveBtnText}>Save & Select Car</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

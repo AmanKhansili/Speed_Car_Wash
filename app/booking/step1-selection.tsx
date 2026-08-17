@@ -43,6 +43,30 @@ export default function Step1SelectionScreen() {
     });
   };
 
+  // Wait until Clerk finishes loading session from storage
+  if (!isLoaded) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+      </View>
+    );
+  }
+
+  // Handle case where user opens screen without being logged in
+  if (!isSignedIn || !userId) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.errorText}>Please log in to make a booking.</Text>
+        <TouchableOpacity
+          style={styles.loginBtn}
+          onPress={() => router.replace("/" as any)}
+        >
+          <Text style={styles.loginBtnText}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

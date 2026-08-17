@@ -218,6 +218,16 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+  disabledBtn: {
+    opacity: 0.7,
+  },
+  btnText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
   confirmBtnText: { color: "#FFF", fontSize: 18, fontWeight: "bold" },
 });

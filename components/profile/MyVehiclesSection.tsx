@@ -9,12 +9,14 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import useUser from "@/context/userContext";
+import { Vehicle as UserVehicle } from "@/types/user";
 
 export interface Vehicle {
   id: string;
-  name: string;      // e.g. "Hyundai i20" (or `${make} ${model}`)
+  name: string;      // e.g. "Hyundai i20"
   type: string;      // e.g. "Hatchback", "SUV"
-  number: string;    // e.g. "DL 01 AB 1234"
+  number: string;    // e.g. "UP 16 AB 1234"
   image?: string;
 }
 
@@ -28,10 +30,23 @@ const DEFAULT_CAR_IMAGE =
   "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=300&auto=format&fit=crop&q=80";
 
 export default function MyVehiclesSection({
-  vehicles = [],
+  vehicles: propVehicles,
   onAddCarPress,
   onCarPress,
 }: MyVehiclesSectionProps) {
+  const { userData } = useUser();
+
+  // Agar parent component props se list nahi de raha, toh direct User Context se map karo
+  const vehiclesToDisplay: Vehicle[] =
+    propVehicles ||
+    (userData.vehicles || []).map((v: UserVehicle) => ({
+      id: v.id,
+      name: `${v.brand} ${v.model}`,
+      type: v.category,
+      number: v.registrationNumber,
+      image: DEFAULT_CAR_IMAGE,
+    }));
+
   return (
     <View style={styles.container}>
       {/* Section Header */}
@@ -42,19 +57,19 @@ export default function MyVehiclesSection({
           activeOpacity={0.7}
           onPress={onAddCarPress}
         >
-          <Ionicons name="add" size={16} color={Colors.primary} />
+          <Ionicons name="add" size={16} color={Colors.primary || "#2563EB"} />
           <Text style={styles.addBtnText}>Add Car</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Empty State (If 0 vehicles) */}
-      {vehicles.length === 0 ? (
+      {/* Empty State */}
+      {vehiclesToDisplay.length === 0 ? (
         <TouchableOpacity
           style={styles.emptyCard}
           activeOpacity={0.8}
           onPress={onAddCarPress}
         >
-          <Ionicons name="car-outline" size={32} color={Colors.primary || "#6366F1"} />
+          <Ionicons name="car-outline" size={32} color={Colors.primary || "#2563EB"} />
           <Text style={styles.emptyTitle}>No vehicles added yet</Text>
           <Text style={styles.emptySubText}>Tap here to add your first car</Text>
         </TouchableOpacity>
@@ -65,7 +80,7 @@ export default function MyVehiclesSection({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContainer}
         >
-          {vehicles.map((item) => (
+          {vehiclesToDisplay.map((item) => (
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.85}
@@ -96,7 +111,9 @@ export default function MyVehiclesSection({
                     size={12}
                     color={Colors.textSecondary || "#64748B"}
                   />
-                  <Text style={styles.plateNumber}>{item.number}</Text>
+                  <Text style={styles.plateNumber}>
+                    {item.number !== "NOT SPECIFIED" ? item.number : "No Reg. No."}
+                  </Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -133,7 +150,7 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: Colors.primary || "#6366F1",
+    color: Colors.primary || "#2563EB",
     marginLeft: 2,
   },
   scrollContainer: {
@@ -196,7 +213,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary || "#64748B",
     letterSpacing: 0.5,
   },
-  /* Empty State Styles */
   emptyCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
