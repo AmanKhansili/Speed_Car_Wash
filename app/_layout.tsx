@@ -11,7 +11,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
-import useUser, { UserProvider } from "@/context/userContext";
+import /*useUser,*/ { UserProvider } from "@/context/userContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export const unstable_settings = {
@@ -29,7 +29,7 @@ if (!publishableKey) {
 // Internal Navigation Component jo UserContext ko consume karega
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { userData } = useUser();
+  // const { userData } = useUser();
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>

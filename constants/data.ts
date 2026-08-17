@@ -7,7 +7,7 @@ export const servicesData = [
     rating: "4.7",
     reviews: "124",
     category: "Wash",
-    image: require("@/assets/images/services/exterior.png"),
+    image: require("@/assets/images/services/exterior.webp"),
     description:
       "Complete vacuuming (seats & boot) + Foot mats cleaning + Body shampooing & door frames + Tyre arches cleaning + Underbody wash + Engine hot water wash & dressing + Side doors cleaning + Dashboard polishing + Premium car perfume spray",
   },
@@ -171,9 +171,9 @@ export const servicesData = [
   },
   {
     id: "13",
-    title:
+    title: "LEATHER CONDITIONING",
+    subtitle:
       "In this treatment, an intensive cleansing of the leather is allotted by a proprietary chemical. This removes the dirt, mud; grime together with terribly powerful stains like chocolates, coffee/ tea etc. The aerosol accustomed clean the surface dries quickly, hence no unhealthy odors and creating the interiors recent.",
-    subtitle: "Deep Clean & Condition for Rich Look",
     price: "₹1000",
     rating: "4.8",
     reviews: "76",

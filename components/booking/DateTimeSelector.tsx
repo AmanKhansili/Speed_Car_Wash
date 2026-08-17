@@ -10,7 +10,6 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
-import Shadow from "@/constants/shadow";
 
 interface DateTimeSelectorProps {
   selectedDate: string; // YYYY-MM-DD

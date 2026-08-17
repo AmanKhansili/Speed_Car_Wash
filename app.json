@@ -41,8 +41,6 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "@clerk/expo",
-      "expo-secure-store",
       "expo-web-browser"
     ],
     "experiments": {

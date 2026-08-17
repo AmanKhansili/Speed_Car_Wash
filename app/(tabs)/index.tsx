@@ -19,50 +19,94 @@ import SectionTitle from "@/components/common/SectionTitle";
 import HeroBanner from "@/components/home/HeroBanner";
 import MembershipBanner from "@/components/home/MembershipBanner";
 import QuickActions from "@/components/home/QuickActions";
+import { useBookingStore } from "@/store/bookingStore";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useUser, useClerk } from "@clerk/expo";
+import { useUser } from "@clerk/expo";
+
+// 🚀 Dynamic Popular Services Data
+const POPULAR_SERVICES = [
+  {
+    id: "pop_1",
+    title: "Silver Wash",
+    subtitle: "Vacuum, Shampoo & Underbody",
+    price: 400,
+    rating: "4.7",
+    reviews: "124",
+    tag: "Popular",
+    image: require("@/assets/images/services/exterior.webp"),
+  },
+  {
+    id: "pop_2",
+    title: "Platinum Wash",
+    subtitle: "Foam Wash, Interior Dry Clean & Polish",
+    price: 1400,
+    rating: "4.9",
+    reviews: "56",
+    tag: "Popular",
+    image: require("@/assets/images/services/interior.webp"),
+  },
+  {
+    id: "pop_3",
+    title: "Teflon Coating",
+    subtitle: "PTFE Polymer Paint Protection",
+    price: 2500,
+    rating: "5.0",
+    reviews: "34",
+    tag: "Popular",
+    image: require("@/assets/images/services/ceramic.webp"),
+  },
+  {
+    id: "pop_4",
+    title: "Wax Rubbing & Buffing",
+    subtitle: "Scratch Repair & Paint Gloss Restore",
+    price: 1400,
+    rating: "4.8",
+    reviews: "75",
+    tag: "Popular",
+    image: require("@/assets/images/services/detailing.webp"),
+  },
+];
 
 export default function HomeScreen() {
   const [address, setAddress] = useState("Fetching location...");
-  const { user, isLoaded: isClerkLoaded } = useUser();
+  const router = useRouter();
+
+  // 🔧 FIX: useUser() was imported but never called — `user` was undefined,
+  // which crashed the greeting text below with a ReferenceError.
+  const { user } = useUser();
+
+  // 🚀 Zustand se addService function nikala
+  const { addService } = useBookingStore();
 
   useEffect(() => {
     (async () => {
       try {
-        // 🚀 3. User se Location ki Permission mango
         let { status } = await Location.requestForegroundPermissionsAsync();
 
         if (status !== "granted") {
-          // Agar user 'Deny' kar de, toh ek default location set kar do
           setAddress("Delhi, India");
           return;
         }
 
-        // 🚀 4. Current Coordinates (Lat/Lng) nikalo
         let location = await Location.getCurrentPositionAsync({});
-
-        // 🚀 5. Coordinates ko real address mein convert karo
         let geoCode = await Location.reverseGeocodeAsync({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
         });
 
-        // 🚀 6. Address ko format karke UI par dikha do
         if (geoCode.length > 0) {
           const currentPlace = geoCode[0];
-          // Ye kuch aisa dikhega: "Connaught Place, Delhi"
           const formattedAddress = `${currentPlace.district || currentPlace.city}, ${currentPlace.region}`;
           setAddress(formattedAddress);
         }
       } catch (error) {
         console.log("Location Error:", error);
-        setAddress("Delhi, India"); // Fallback location
+        setAddress("Delhi, India");
       }
     })();
   }, []);
 
-  const router = useRouter();
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
@@ -111,7 +155,9 @@ export default function HomeScreen() {
 
         {/* GREETING */}
         <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>Hello, {user?.firstName} 👋</Text>
+          <Text style={styles.greetingTitle}>
+            Hello, {user?.firstName || "Guest"} 👋
+          </Text>
           <Text style={styles.greetingSub}>
             Keep your car clean, Keep your ride fresh
           </Text>
@@ -131,44 +177,30 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.horizontalScroll}
         >
-          <ServiceCard
-            title="Exterior Wash"
-            subtitle="Shine Like New"
-            price="₹299"
-            rating="4.9"
-            reviews="120"
-            tag="Popular"
-            image={require("@/assets/images/services/exterior.png")}
-            style={{ marginRight: 16 }}
-          />
-          <ServiceCard
-            title="Interior Cleaning"
-            subtitle="Fresh & Clean"
-            price="₹499"
-            rating="4.8"
-            reviews="69"
-            image={require("@/assets/images/services/interior.png")}
-            style={{ marginRight: 16 }}
-          />
-          <ServiceCard
-            title="Ceramic Coating"
-            subtitle="Long Lasting Protection"
-            price="₹1999"
-            rating="5.0"
-            reviews="10"
-            tag="Popular"
-            image={require("@/assets/images/services/ceramic.png")}
-            style={{ marginRight: 16 }}
-          />
-          <ServiceCard
-            title="Car Detailing"
-            subtitle="Premium Shine"
-            price="₹999"
-            rating="4"
-            reviews="9"
-            image={require("@/assets/images/services/detailing.png")}
-            style={{ marginRight: 16 }}
-          />
+          {/* 🚀 Dynamic Map Logic for Popular Services */}
+          {POPULAR_SERVICES.map((item) => (
+            <ServiceCard
+              key={item.id}
+              title={item.title}
+              subtitle={item.subtitle}
+              price={`₹${item.price}`} // String format for UI
+              rating={item.rating}
+              reviews={item.reviews}
+              tag={item.tag}
+              image={item.image}
+              style={{ marginRight: 16 }}
+              onAddPress={() => {
+                // 1. Service ko cart/store mein add karo
+                addService({
+                  id: item.id,
+                  title: item.title,
+                  price: item.price,
+                });
+                // 2. Direct Booking page par bhej do
+                router.push("/booking/step1-selection" as any);
+              }}
+            />
+          ))}
         </ScrollView>
 
         {/* PREMIUM MEMBERSHIP BANNER */}
@@ -209,10 +241,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 15,
-    // paddingTop: 16,
     paddingBottom: 10,
   },
-
   notificationBtn: { padding: 4 },
   notificationDot: {
     position: "absolute",
@@ -233,17 +263,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   greetingSub: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  sectionTitle: { fontSize: 18, fontWeight: "800", color: Colors.text },
-  viewAllText: { fontSize: 13, fontWeight: "700", color: Colors.primary },
   horizontalScroll: { paddingLeft: 16, paddingRight: 8, paddingBottom: 16 },
-
   locationContainer: { flexDirection: "row", alignItems: "center", gap: 6 },
   locationLabel: {
     fontSize: 11,

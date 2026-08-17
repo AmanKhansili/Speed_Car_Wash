@@ -11,7 +11,7 @@ const supabase = createClient(
 );
 
 serve(async (req) => {
-  const { bookingId, amount, clerkUserId } = await req.json();
+  const { bookingIds, amount, clerkUserId } = await req.json();
 
   const auth = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`);
   const res = await fetch("https://api.razorpay.com/v1/orders", {
@@ -20,14 +20,13 @@ serve(async (req) => {
     body: JSON.stringify({
       amount: amount * 100,
       currency: "INR",
-      notes: { bookingId, clerkUserId },
+      notes: { bookingIds: bookingIds.join(","), clerkUserId },
     }),
   });
   const order = await res.json();
 
-  // Insert a "created" row so we have a record even before payment completes
   await supabase.from("payments").insert({
-    booking_id: bookingId,
+    booking_ids: bookingIds,
     razorpay_order_id: order.id,
     amount,
     status: "created",

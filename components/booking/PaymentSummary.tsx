@@ -24,6 +24,12 @@ export default function PaymentSummary({
   const getCalculatedBasePrice = (): number => {
     if (customBasePrice) return customBasePrice;
 
+    // 🚀 'any' casting se TypeScript ka error turant khatam ho jayega
+    const data = bookingData as any;
+    if (data?.itemTotal && typeof data.itemTotal === "number") {
+      return data.itemTotal;
+    }
+
     if (bookingData?.servicePrice) {
       if (typeof bookingData.servicePrice === "number") {
         return bookingData.servicePrice;
