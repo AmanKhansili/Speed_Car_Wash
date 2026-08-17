@@ -1,9 +1,10 @@
 import Colors from "@/constants/colors";
 import useUser from "@/context/userContext";
-import { supabase } from "@/utils/supabase";
+import { createClerkSupabaseClient } from "@/utils/supabase";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,114 +22,136 @@ export interface Booking {
   price: string;
   date: string;
   address: string;
-  status: "Confirmed" | "Pending" | "Cancelled" | "Completed";
+  phone: string;
+  status: "Confirmed" | "Pending" | "Cancelled" | "Completed" | "Failed";
   type: "upcoming" | "past";
   image?: any;
 }
 
 export default function BookingTabs() {
   const router = useRouter();
+  const { userId, getToken } = useAuth(); // getToken bhi nikala
 
-  const { userData, /*updateBookings*/ } = useUser() as any; 
+  // Clerk-aware Supabase client — RLS ke liye zaroori
+  const clerkSupabase = useMemo(
+    () => createClerkSupabaseClient(getToken),
+    [getToken],
+  );
+
+  const { userData } = useUser() as any;
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [loading, setLoading] = useState(true);
 
-  const defaultBookings: Booking[] = [
-    // {
-    //   id: "1",
-    //   title: "Standard Foam Wash",
-    //   price: "₹499",
-    //   date: "12 Aug 2026, 10:00 AM",
-    //   address: "Plot 12, Sector 63, Noida",
-    //   status: "Confirmed",
-    //   type: "upcoming",
-    // },
-  ];
+  const defaultBookings: Booking[] = [];
 
   const [bookings, setBookings] = useState<Booking[]>(() => {
-    if (userData?.bookings && Array.isArray(userData.bookings) && userData.bookings.length > 0) {
+    if (
+      userData?.bookings &&
+      Array.isArray(userData.bookings) &&
+      userData.bookings.length > 0
+    ) {
       return userData.bookings as Booking[];
     }
     return defaultBookings;
   });
 
-  // Sync with UserContext changes safely
-  // 🚀 Fetch Bookings directly from Supabase
   useEffect(() => {
-    fetchSupabaseBookings();
-  }, []);
+    console.log("🔍 [Bookings] useEffect fired, userId:", userId);
+    if (userId) {
+      fetchSupabaseBookings();
+    } else {
+      setLoading(false);
+    }
+  }, [userId]);
 
   const fetchSupabaseBookings = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      console.log("🔍 [Bookings] Fetching for userId:", userId);
+
+      const { data, error } = await clerkSupabase
         .from("bookings")
         .select("*")
-        .eq("user_id", "test_user_aman") // Testing ID
+        .eq("clerk_user_id", userId)
         .order("created_at", { ascending: false });
+
+      console.log("🔍 [Bookings] error:", error);
+      console.log("🔍 [Bookings] data count:", data?.length, data);
 
       if (error) throw error;
 
       if (data) {
-        // Supabase data ko Booking interface ke format mein map kar rahe hain
+        // Naye schema ke hisaab se map kar rahe hain: har row ek alag service/booking hai
         const formattedBookings: Booking[] = data.map((item: any) => {
-          const firstService = item.services_booked?.[0] || {
-            title: "Car Service",
-            price: item.total_amount,
-          };
-          const isCancelled = item.status === "Cancelled";
+          const isCancelledOrFailed =
+            item.status === "Cancelled" || item.status === "Failed";
+          const isPast = isCancelledOrFailed || item.status === "Completed";
 
           return {
             id: item.id,
-            title: firstService.title,
-            price: `₹${item.total_amount}`,
-            date: item.booking_date || "Scheduled Soon",
-            address: item.address || "Workshop Center",
+            title: item.service_name || "Car Service",
+            price: `₹${item.amount ?? 0}`,
+            date: item.scheduled_date || "Scheduled Soon",
+            address:
+              item.service_type === "pickup"
+                ? "Pickup Requested"
+                : "Workshop Center",
             status: item.status || "Pending",
-            type: isCancelled || item.status === "Completed" ? "past" : "upcoming",
+            phone: item.phone || "N/A",
+            type: isPast ? "past" : "upcoming",
           };
         });
 
+        console.log("🔍 [Bookings] formatted:", formattedBookings);
         setBookings(formattedBookings);
       }
     } catch (error) {
-      console.log("Failed to fetch bookings from Supabase", error);
+      console.log(
+        "❌ [Bookings] Failed to fetch bookings from Supabase",
+        error,
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // Cancel Booking Handler in Supabase
   const handleCancel = async (id: string) => {
-    Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
-      { text: "No", style: "cancel" },
-      {
-        text: "Yes, Cancel",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const { error } = await supabase
-              .from("bookings")
-              .update({ status: "Cancelled" })
-              .eq("id", id);
+    Alert.alert(
+      "Cancel Booking",
+      "Are you sure you want to cancel this booking?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await clerkSupabase
+                .from("bookings")
+                .update({ status: "Cancelled" })
+                .eq("id", id);
 
-            if (error) throw error;
+              if (error) throw error;
 
-            // Local state update
-            const updated = bookings.map((item) => {
-              if (item.id === id) {
-                return { ...item, status: "Cancelled" as const, type: "past" as const };
-              }
-              return item;
-            });
-            setBookings(updated);
-          } catch (err:any) {
-            Alert.alert("Error", "Could not cancel booking");
-          }
+              const updated = bookings.map((item) => {
+                if (item.id === id) {
+                  return {
+                    ...item,
+                    status: "Cancelled" as const,
+                    type: "past" as const,
+                  };
+                }
+                return item;
+              });
+              setBookings(updated);
+            } catch (err: any) {
+              Alert.alert("Error", "Could not cancel booking");
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const filteredBookings = bookings.filter((item) => {
@@ -179,6 +202,10 @@ export default function BookingTabs() {
             {item.address}
           </Text>
         </View>
+        <View style={styles.detailRow}>
+          <Ionicons name="call-outline" size={16} color="#64748B" />
+          <Text style={styles.detailText}>{item.phone}</Text>
+        </View>
       </View>
 
       {item.type === "upcoming" && item.status !== "Cancelled" && (
@@ -197,21 +224,37 @@ export default function BookingTabs() {
     <View style={styles.container}>
       <View style={styles.tabHeader}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
+          style={[
+            styles.tabButton,
+            activeTab === "upcoming" && styles.activeTabButton,
+          ]}
           onPress={() => setActiveTab("upcoming")}
           activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === "upcoming" && styles.activeTabText]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "upcoming" && styles.activeTabText,
+            ]}
+          >
             Upcoming
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === "past" && styles.activeTabButton]}
+          style={[
+            styles.tabButton,
+            activeTab === "past" && styles.activeTabButton,
+          ]}
           onPress={() => setActiveTab("past")}
           activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === "past" && styles.activeTabText]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "past" && styles.activeTabText,
+            ]}
+          >
             Past & Cancelled
           </Text>
         </TouchableOpacity>
@@ -259,7 +302,12 @@ const styles = StyleSheet.create({
     padding: 4,
     marginBottom: 16,
   },
-  tabButton: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 8 },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderRadius: 8,
+  },
   activeTabButton: {
     backgroundColor: "#FFFFFF",
     elevation: 2,
@@ -278,7 +326,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
-  addBookingBtnText: { color: "#FFFFFF", fontWeight: "700", marginLeft: 6, fontSize: 14 },
+  addBookingBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    marginLeft: 6,
+    fontSize: 14,
+  },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
@@ -288,11 +341,26 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   cardHeader: { flexDirection: "row", alignItems: "center" },
-  cardImage: { width: 50, height: 50, borderRadius: 10, backgroundColor: "#F1F5F9" },
+  cardImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+  },
   headerInfo: { flex: 1, marginLeft: 12 },
   cardTitle: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
-  cardPrice: { fontSize: 14, fontWeight: "600", color: Colors.primary || "#2563EB", marginTop: 2 },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "#F1F5F9" },
+  cardPrice: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.primary || "#2563EB",
+    marginTop: 2,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#F1F5F9",
+  },
   badgeText: { fontSize: 11, fontWeight: "700", color: "#475569" },
   confirmedBadge: { backgroundColor: "#DCFCE7" },
   pendingBadge: { backgroundColor: "#FEF3C7" },
@@ -311,6 +379,10 @@ const styles = StyleSheet.create({
     borderColor: "#EF4444",
   },
   cancelBtnText: { color: "#EF4444", fontSize: 12, fontWeight: "600" },
-  emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: 40 },
+  emptyBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
   emptyText: { marginTop: 8, color: "#94A3B8", fontSize: 14 },
 });
