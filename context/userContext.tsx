@@ -1,33 +1,26 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useMemo,
-  ReactNode,
-  useCallback,
-} from "react";
-import { LocalUserData, UserLocation, Vehicle, NewVehicle } from "@/types/user";
+import { LocalUserData, UserLocation, Vehicle } from "@/types/user";
 import {
   getLocalUserData,
-  savePhoneLocally,
-  saveLocationLocally,
-  saveVehicleLocally,
   removeVehicleLocally,
+  saveLocationLocally,
+  savePhoneLocally,
+  saveVehicleLocally,
   setSelectedVehicleLocally,
   addVehicleWithSync,
 } from "@/utils/userStorage";
-import { createClerkSupabaseClient } from "@/utils/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 
+// 1. Context Type Interface (Added bookings support)
 interface UserContextType {
-  userData: LocalUserData;
-  isLoaded: boolean;
+  userData: LocalUserData & { bookings?: any[] };
   updatePhone: (phone: string) => Promise<void>;
   updateLocation: (loc: UserLocation) => Promise<void>;
   addVehicle: (veh: NewVehicle) => Promise<Vehicle>;
   updateVehicle: (veh: Vehicle) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   selectVehicle: (id: string) => Promise<void>;
+  updateBookings: (bookings: any[]) => Promise<void>;
   syncWithDB: () => Promise<void>;
 }
 
@@ -39,13 +32,15 @@ interface UserProviderProps {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-export const UserProvider = ({ children, userId, getToken }: UserProviderProps) => {
-  const [userData, setUserData] = useState<LocalUserData>({
+// 4. Provider Component
+export const UserProvider = ({ children, userId }: UserProviderProps) => {
+  const [userData, setUserData] = useState<LocalUserData & { bookings?: any[] }>({
     mobileNumber: "",
     location: null,
     vehicles: [],
     selectedVehicleId: null,
     lastUpdated: Date.now(),
+    bookings: [],
   });
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
@@ -93,16 +88,17 @@ export const UserProvider = ({ children, userId, getToken }: UserProviderProps) 
     }
   }, [userId, clerkSupabase]);
 
+  // App load par Local Storage se state aur bookings fill karein
   useEffect(() => {
     const initData = async () => {
-      try {
-        const data = await getLocalUserData();
-        setUserData(data);
-      } catch (err) {
-        console.error("[UserContext] Initialization error:", err);
-      } finally {
-        setIsLoaded(true);
-      }
+      const data = await getLocalUserData();
+      const storedBookings = await AsyncStorage.getItem("user_bookings");
+      const parsedBookings = storedBookings ? JSON.parse(storedBookings) : [];
+
+      setUserData({
+        ...data,
+        bookings: parsedBookings,
+      });
     };
 
     initData();
@@ -116,42 +112,60 @@ export const UserProvider = ({ children, userId, getToken }: UserProviderProps) 
 
   const updatePhone = async (phone: string) => {
     const updated = await savePhoneLocally(phone);
-    setUserData(updated);
+    setUserData((prev) => ({ ...prev, ...updated }));
+    await syncWithDB();
   };
 
   const updateLocation = async (location: UserLocation) => {
     const updated = await saveLocationLocally(location);
-    setUserData(updated);
-  };
-
-  const addVehicle = async (newVehicle: NewVehicle): Promise<Vehicle> => {
-    if (!userId) {
-      throw new Error("User not authenticated. Please sign in to add a vehicle.");
-    }
-    if (!clerkSupabase) {
-      throw new Error("Auth session not ready yet. Please try again in a moment.");
-    }
-
-    const { vehicle: createdVehicle, userData: updatedLocalData } =
-      await addVehicleWithSync(newVehicle, userId, clerkSupabase);
-
-    setUserData(updatedLocalData);
-    return createdVehicle;
+    setUserData((prev) => ({ ...prev, ...updated }));
+    await syncWithDB();
   };
 
   const updateVehicle = async (vehicle: Vehicle) => {
     const updated = await saveVehicleLocally(vehicle);
-    setUserData(updated);
+    setUserData((prev) => ({ ...prev, ...updated }));
+    await syncWithDB();
   };
 
   const deleteVehicle = async (id: string) => {
-    const updated = await removeVehicleLocally(id, true, clerkSupabase ?? undefined);
-    setUserData(updated);
+    if (removeVehicleLocally) {
+      const updated = await removeVehicleLocally(id);
+      setUserData((prev) => ({ ...prev, ...updated }));
+      await syncWithDB();
+    } else {
+      const updatedVehicles = userData.vehicles.filter((v) => v.id !== id);
+      setUserData((prev) => ({
+        ...prev,
+        vehicles: updatedVehicles,
+        selectedVehicleId: prev.selectedVehicleId === id ? null : prev.selectedVehicleId,
+      }));
+    }
   };
 
   const selectVehicle = async (id: string) => {
-    const updated = await setSelectedVehicleLocally(id);
-    setUserData(updated);
+    if (setSelectedVehicleLocally) {
+      const updated = await setSelectedVehicleLocally(id);
+      setUserData((prev) => ({ ...prev, ...updated }));
+    } else {
+      setUserData((prev) => ({
+        ...prev,
+        selectedVehicleId: id,
+      }));
+    }
+  };
+
+  // 🚀 NAYA: Bookings update aur save karne ka handler
+  const updateBookings = async (newBookings: any[]) => {
+    try {
+      await AsyncStorage.setItem("user_bookings", JSON.stringify(newBookings));
+      setUserData((prev) => ({
+        ...prev,
+        bookings: newBookings,
+      }));
+    } catch (error) {
+      console.error("Failed to save bookings:", error);
+    }
   };
 
   return (
@@ -165,6 +179,7 @@ export const UserProvider = ({ children, userId, getToken }: UserProviderProps) 
         updateVehicle,
         deleteVehicle,
         selectVehicle,
+        updateBookings,
         syncWithDB,
       }}
     >

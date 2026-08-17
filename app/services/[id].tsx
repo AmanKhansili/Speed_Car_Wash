@@ -1,10 +1,10 @@
 import Colors from "@/constants/colors";
-import { servicesData } from "@/constants/data";
 import Radius from "@/constants/radius";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   ScrollView,
   StatusBar,
@@ -15,25 +15,79 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// 🚀 ZUSTAND STORE IMPORT
+import { supabase } from "@/utils/supabase";
+import { useBookingStore } from "../../store/bookingStore";
+
 export default function ServiceDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
 
-  // URL se jo ID aayi, uske base par data nikal liya
-  const service = servicesData.find((s) => s.id === id);
+  const [service, setService] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  // 🚀 ZUSTAND STATE
+  const { addService } = useBookingStore();
+
+  // 🚀 Fetch Single Service from Supabase using ID
+  useEffect(() => {
+    if (id) {
+      fetchServiceDetails();
+    }
+  }, [id]);
+
+  const fetchServiceDetails = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.from("services").select("*").eq("id", id).single();
+
+      if (error) throw error;
+      if (data) setService(data);
+    } catch (error) {
+      console.log("Error fetching service details:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+      </SafeAreaView>
+    );
+  }
 
   if (!service) {
     return (
       <SafeAreaView style={styles.errorContainer}>
-        <Text>Service not found!</Text>
+        <Text style={{ color: Colors.text }}>Service not found!</Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text>Go Back</Text>
+          <Text style={{ color: Colors.primary, marginTop: 10 }}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
-  const featuresList = service.description.split("+").map((item) => item.trim());
+  const featuresList = service.description
+    ? service.description.split("+").map((item: string) => item.trim())
+    : [];
+
+  // 🚀 BOOK NOW ACTION
+  const handleBookNow = () => {
+    const numericPrice =
+      typeof service.price === "number"
+        ? service.price
+        : parseInt(service.price.replace(/[^\d]/g, ""), 10);
+
+    addService({
+      id: service.id,
+      title: service.title,
+      price: numericPrice,
+    });
+
+    router.push("/booking/step1-selection" as any);
+  };
 
   return (
     <View style={styles.container}>
@@ -46,10 +100,18 @@ export default function ServiceDetailsScreen() {
       >
         {/* BIG IMAGE HEADER */}
         <View style={styles.imageContainer}>
-          <Image source={service.image as any} style={styles.mainImage} resizeMode="cover" />
+          <Image
+            source={{
+              uri:
+                service.image && service.image.startsWith("http")
+                  ? service.image
+                  : "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=600&auto=format&fit=crop&q=80",
+            }}
+            style={styles.mainImage}
+            resizeMode="cover"
+          />
           <View style={styles.overlay} />
 
-          {/* Back Button over Image */}
           <SafeAreaView edges={["top"]} style={styles.headerSafe}>
             <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
               <Ionicons name="chevron-back" size={24} color="#FFF" />
@@ -57,7 +119,7 @@ export default function ServiceDetailsScreen() {
           </SafeAreaView>
         </View>
 
-        {/* CONTENT SECTION (Overlapping image slightly) */}
+        {/* CONTENT SECTION */}
         <View style={styles.contentContainer}>
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{service.category}</Text>
@@ -68,9 +130,9 @@ export default function ServiceDetailsScreen() {
 
           <View style={styles.metaRow}>
             <View style={styles.ratingBox}>
-              <Ionicons name="star" size={16} color={Colors.warning} />
-              <Text style={styles.ratingText}>{service.rating}</Text>
-              <Text style={styles.reviewText}>({service.reviews} reviews)</Text>
+              <Ionicons name="star" size={16} color={Colors.warning || "#F59E0B"} />
+              <Text style={styles.ratingText}>{service.rating || "4.8"}</Text>
+              <Text style={styles.reviewText}>({service.reviews || "50"} reviews)</Text>
             </View>
           </View>
 
@@ -79,7 +141,7 @@ export default function ServiceDetailsScreen() {
           {/* WHAT'S INCLUDED SECTION */}
           <Text style={styles.sectionTitle}>{"What's Included"}</Text>
           <View style={styles.featuresContainer}>
-            {featuresList.map((feature, index) => (
+            {featuresList.map((feature: string, index: number) => (
               <View key={index} style={styles.featureItem}>
                 <Ionicons
                   name="checkmark-circle"
@@ -98,9 +160,12 @@ export default function ServiceDetailsScreen() {
       <View style={styles.bottomBar}>
         <View>
           <Text style={styles.bottomPriceLabel}>Total Price</Text>
-          <Text style={styles.bottomPrice}>{service.price}</Text>
+          <Text style={styles.bottomPrice}>
+            {typeof service.price === "number" ? `₹${service.price}` : service.price}
+          </Text>
         </View>
-        <TouchableOpacity style={styles.bookBtn}>
+
+        <TouchableOpacity style={styles.bookBtn} onPress={handleBookNow} activeOpacity={0.8}>
           <Text style={styles.bookBtnText}>Book Now</Text>
         </TouchableOpacity>
       </View>
@@ -114,7 +179,7 @@ const styles = StyleSheet.create({
 
   imageContainer: { width: "100%", height: 300, position: "relative" },
   mainImage: { width: "100%", height: "100%" },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" }, // Dark gradient effect
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
   headerSafe: { position: "absolute", top: 0, left: 0, right: 0, paddingHorizontal: 16 },
   backBtn: {
     width: 40,
@@ -179,7 +244,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     paddingBottom: 32,
-  }, // paddingBottom for iOS safe area
+  },
   bottomPriceLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 2 },
   bottomPrice: { fontSize: 24, fontWeight: "800", color: Colors.primary },
   bookBtn: {

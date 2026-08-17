@@ -1,17 +1,19 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  FlatList,
-  Alert,
-} from "react-native";
+import Colors from "@/constants/colors";
+import useUser from "@/context/userContext";
+import { supabase } from "@/utils/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import useUser  from "@/context/userContext";
-import Colors from "@/constants/colors";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export interface Booking {
   id: string;
@@ -21,55 +23,79 @@ export interface Booking {
   address: string;
   status: "Confirmed" | "Pending" | "Cancelled" | "Completed";
   type: "upcoming" | "past";
-  image?: string;
+  image?: any;
 }
 
 export default function BookingTabs() {
   const router = useRouter();
-  
-  // 👈 Yahan `as any` lagane se `userData` aur `updateBookings` ka koi bhi TypeScript error nahi aayega
-  const { userData, updateBookings } = useUser() as any; 
+  const { userData } = useUser() as any;
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Fallback dummy bookings agar userContext empty ho
-  const defaultBookings: Booking[] = [
-    {
-      id: "1",
-      title: "Standard Foam Wash",
-      price: "₹499",
-      date: "12 Aug 2026, 10:00 AM",
-      address: "Plot 12, Sector 63, Noida",
-      status: "Confirmed",
-      type: "upcoming",
-    },
-  ];
-
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    if (userData?.bookings && Array.isArray(userData.bookings) && userData.bookings.length > 0) {
-      return userData.bookings as Booking[];
-    }
-    return defaultBookings;
-  });
-
-  // Sync with UserContext changes safely
+  // 🚀 Fetch Bookings directly from Supabase
   useEffect(() => {
-    if (userData?.bookings && Array.isArray(userData.bookings)) {
-      setBookings(userData.bookings as Booking[]);
-    }
-  }, [userData?.bookings]);
+    fetchSupabaseBookings();
+  }, []);
 
-  // Cancel Booking Handler
-  const handleCancel = (id: string) => {
-    Alert.alert(
-      "Cancel Booking",
-      "Are you sure you want to cancel this booking?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, Cancel",
-          style: "destructive",
-          onPress: async () => {
+  const fetchSupabaseBookings = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("user_id", "test_user_aman") // Testing ID
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        // Supabase data ko Booking interface ke format mein map kar rahe hain
+        const formattedBookings: Booking[] = data.map((item: any) => {
+          const firstService = item.services_booked?.[0] || {
+            title: "Car Service",
+            price: item.total_amount,
+          };
+          const isCancelled = item.status === "Cancelled";
+
+          return {
+            id: item.id,
+            title: firstService.title,
+            price: `₹${item.total_amount}`,
+            date: item.booking_date || "Scheduled Soon",
+            address: item.address || "Workshop Center",
+            status: item.status || "Pending",
+            type: isCancelled || item.status === "Completed" ? "past" : "upcoming",
+          };
+        });
+
+        setBookings(formattedBookings);
+      }
+    } catch (error) {
+      console.log("Failed to fetch bookings from Supabase", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cancel Booking Handler in Supabase
+  const handleCancel = async (id: string) => {
+    Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes, Cancel",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const { error } = await supabase
+              .from("bookings")
+              .update({ status: "Cancelled" })
+              .eq("id", id);
+
+            if (error) throw error;
+
+            // Local state update
             const updated = bookings.map((item) => {
               if (item.id === id) {
                 return { ...item, status: "Cancelled" as const, type: "past" as const };
@@ -77,16 +103,14 @@ export default function BookingTabs() {
               return item;
             });
             setBookings(updated);
-            if (updateBookings) {
-              await updateBookings(updated);
-            }
-          },
+          } catch (err) {
+            Alert.alert("Error", "Could not cancel booking");
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  // Tab ke mutabiq bookings filter karein
   const filteredBookings = bookings.filter((item) => {
     if (activeTab === "upcoming") {
       return item.type === "upcoming" && item.status !== "Cancelled";
@@ -100,11 +124,10 @@ export default function BookingTabs() {
       <View style={styles.cardHeader}>
         <Image
           source={{
-            uri:
-              item.image ||
-              "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
+            uri: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
           }}
           style={styles.cardImage}
+          resizeMode="cover"
         />
         <View style={styles.headerInfo}>
           <Text style={styles.cardTitle}>{item.title}</Text>
@@ -152,7 +175,6 @@ export default function BookingTabs() {
 
   return (
     <View style={styles.container}>
-      {/* TOGGLE TABS */}
       <View style={styles.tabHeader}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
@@ -175,7 +197,6 @@ export default function BookingTabs() {
         </TouchableOpacity>
       </View>
 
-      {/* NEW BOOKING BUTTON */}
       {activeTab === "upcoming" && (
         <TouchableOpacity
           style={styles.addBookingBtn}
@@ -187,8 +208,11 @@ export default function BookingTabs() {
         </TouchableOpacity>
       )}
 
-      {/* LIST OF BOOKINGS */}
-      {filteredBookings.length > 0 ? (
+      {loading ? (
+        <View style={styles.emptyBox}>
+          <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+        </View>
+      ) : filteredBookings.length > 0 ? (
         <FlatList
           data={filteredBookings}
           keyExtractor={(item) => item.id}
@@ -207,9 +231,7 @@ export default function BookingTabs() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 10,
-  },
+  container: { paddingHorizontal: 10 },
   tabHeader: {
     flexDirection: "row",
     backgroundColor: "#E2E8F0",
@@ -217,12 +239,7 @@ const styles = StyleSheet.create({
     padding: 4,
     marginBottom: 16,
   },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 8,
-  },
+  tabButton: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 8 },
   activeTabButton: {
     backgroundColor: "#FFFFFF",
     elevation: 2,
@@ -230,14 +247,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  activeTabText: {
-    color: Colors.primary || "#2563EB",
-  },
+  tabText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
+  activeTabText: { color: Colors.primary || "#2563EB" },
   addBookingBtn: {
     backgroundColor: Colors.primary || "#2563EB",
     flexDirection: "row",
@@ -247,12 +258,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
-  addBookingBtnText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    marginLeft: 6,
-    fontSize: 14,
-  },
+  addBookingBtnText: { color: "#FFFFFF", fontWeight: "700", marginLeft: 6, fontSize: 14 },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
@@ -261,63 +267,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  cardImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
-  },
-  headerInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  cardPrice: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.primary || "#2563EB",
-    marginTop: 2,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: "#F1F5F9",
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#475569",
-  },
+  cardHeader: { flexDirection: "row", alignItems: "center" },
+  cardImage: { width: 50, height: 50, borderRadius: 10, backgroundColor: "#F1F5F9" },
+  headerInfo: { flex: 1, marginLeft: 12 },
+  cardTitle: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
+  cardPrice: { fontSize: 14, fontWeight: "600", color: Colors.primary || "#2563EB", marginTop: 2 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "#F1F5F9" },
+  badgeText: { fontSize: 11, fontWeight: "700", color: "#475569" },
   confirmedBadge: { backgroundColor: "#DCFCE7" },
   pendingBadge: { backgroundColor: "#FEF3C7" },
   cancelledBadge: { backgroundColor: "#FEE2E2" },
   completedBadge: { backgroundColor: "#F1F5F9" },
-  divider: {
-    height: 1,
-    backgroundColor: "#F1F5F9",
-    marginVertical: 10,
-  },
-  cardDetails: {
-    gap: 6,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  detailText: {
-    fontSize: 13,
-    color: "#64748B",
-  },
+  divider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 10 },
+  cardDetails: { gap: 6 },
+  detailRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  detailText: { fontSize: 13, color: "#64748B" },
   cancelBtn: {
     marginTop: 12,
     paddingVertical: 8,
@@ -326,19 +290,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#EF4444",
   },
-  cancelBtnText: {
-    color: "#EF4444",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  emptyBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
-  emptyText: {
-    marginTop: 8,
-    color: "#94A3B8",
-    fontSize: 14,
-  },
+  cancelBtnText: { color: "#EF4444", fontSize: 12, fontWeight: "600" },
+  emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: 40 },
+  emptyText: { marginTop: 8, color: "#94A3B8", fontSize: 14 },
 });

@@ -1,279 +1,221 @@
-import React, { useMemo, useState } from "react";
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Text,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { useAuth } from "@clerk/expo";
-import useUser from "@/context/userContext";
-import { useRazorpay } from "@codearcade/expo-razorpay";
-
-import PaymentSummary from "@/components/booking/PaymentSummary";
 import Colors from "@/constants/colors";
-import { createClerkSupabaseClient } from "@/utils/supabase";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+// 🚀 Official Razorpay SDK
+import RazorpayCheckout from "react-native-razorpay";
 
-export default function Step4SummaryScreen() {
-  const router = useRouter();
-  const { userData } = useUser();
-  const { userId: clerkUserId, getToken } = useAuth();
-  const { openCheckout, RazorpayUI } = useRazorpay();
+import { useBookingStore } from "@/store/bookingStore";
+import { supabase } from "@/utils/supabase";
 
-  // Clerk session token wala Supabase client — memoized taaki reuse ho,
-  // sirf getToken change hone pe naya banega
-  const supabase = useMemo(
-    () => createClerkSupabaseClient(getToken),
-    [getToken],
-  );
-
-  const [total, setTotal] = useState<number>(0);
-  const [processing, setProcessing] = useState<boolean>(false);
-
+export default function BookingSummaryScreen() {
+  const { selectedServices, getTotalPrice, clearCart } = useBookingStore();
   const params = useLocalSearchParams<{
-    vehicleId?: string;
-    serviceId?: string;
     date?: string;
     serviceType?: string;
-    addressId?: string;
     addressText?: string;
-    phone?: string;
+    primaryPhone?: string;
+    altPhone?: string;
   }>();
 
-  const selectedVehicle =
-    userData.vehicles?.find((v) => v.id === params.vehicleId) || null;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const bookingData = {
-    vehicleId: params.vehicleId,
-    vehicle: selectedVehicle,
-    serviceId: params.serviceId,
-    date: params.date,
-    serviceType: (params.serviceType as "pickup" | "walkin") || "pickup",
-    addressId: params.addressId,
-    addressText: params.addressText,
-    phone: params.phone || userData.mobileNumber,
+  // 🚀 MATH CALCULATION
+  const subTotal = getTotalPrice();
+  const gst = Math.round(subTotal * 0.18);
+  const platformFee = 49;
+  const grandTotal = subTotal > 0 ? subTotal + gst + platformFee : 0;
+
+  // 🚀 2. SUPABASE SAVE (Payment ke baad)
+  const saveBookingToSupabase = async (paymentId: string) => {
+    try {
+      const { error } = await supabase.from("bookings").insert([
+        {
+          user_id: "client_user_001", // Authentication lagne ke baad ise dynamic kar dena
+          services_booked: selectedServices,
+          total_amount: grandTotal,
+          booking_date: params.date || new Date().toISOString(),
+          service_type: params.serviceType || "pickup",
+          address: params.addressText || "Workshop Center",
+          primary_phone: params.primaryPhone || "",
+          alt_phone: params.altPhone || "",
+          status: "Confirmed",
+          payment_id: paymentId,
+        },
+      ]);
+
+      if (error) throw error;
+
+      Alert.alert("Payment Successful 🎉", `Your booking is confirmed. \nRef ID: ${paymentId}`, [
+        {
+          text: "View Bookings",
+          onPress: () => {
+            clearCart();
+            router.replace("/(tabs)/bookings" as any);
+          },
+        },
+      ]);
+    } catch (error: any) {
+      Alert.alert("Database Error", "Payment received but booking save failed. Contact support.");
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleMakePayment = async () => {
-    if (!clerkUserId) {
-      Alert.alert(
-        "Authentication Error",
-        "User not logged in. Please log in again.",
-      );
+  // 🚀 1. RAZORPAY TRIGGER
+  const handlePaymentAndBooking = () => {
+    if (grandTotal <= 0) {
+      Alert.alert("Error", "Your cart is empty!");
       return;
     }
 
-    if (!bookingData.vehicleId || !bookingData.serviceId) {
-      Alert.alert(
-        "Missing Details",
-        "Please select a vehicle and service before proceeding.",
-      );
-      return;
-    }
+    setIsSubmitting(true);
 
-    if (total <= 0) {
-      Alert.alert(
-        "Invalid Amount",
-        "Please wait until the total summary calculates properly.",
-      );
-      return;
-    }
+    // Razorpay Configuration
+    const options = {
+      description: "Premium Car Wash & Detailing",
+      image: require("@/assets/logo/logo.png"), // Client ka logo URL yahan daal sakte ho
+      currency: "INR",
+      key: "rzp_test_TPXivOh8YV97Lz", // 🔴 IMPORTANT: Yahan apna Razorpay Test Key daalo
+      amount: grandTotal * 100, // Razorpay amount paise mein leta hai
+      name: "Car Wash App",
+      prefill: {
+        email: "customer@example.com",
+        contact: params.primaryPhone || "9999999999",
+        name: "Customer Name",
+      },
+      theme: { color: Colors.primary || "#2563EB" },
+    };
 
-    setProcessing(true);
-
-    try {
-      // 1. Create booking row with 'pending' status in Supabase
-      const { data: booking, error: bookingError } = await supabase
-        .from("bookings")
-        .insert({
-          clerk_user_id: clerkUserId,
-          vehicle_id: bookingData.vehicleId,
-          address_id:
-            bookingData.addressId === "walkin" ? null : bookingData.addressId,
-          service_type: bookingData.serviceType,
-          service_name: bookingData.serviceId,
-          scheduled_date: bookingData.date,
-          phone: bookingData.phone,
-          amount: total,
-          status: "pending",
-        })
-        .select()
-        .single();
-
-      if (bookingError || !booking) {
-        console.error("Booking Creation Error:", bookingError);
-        Alert.alert(
-          "Booking Failed",
-          "Could not create booking record. Please try again.",
-        );
-        setProcessing(false);
-        return;
-      }
-
-      // 2. Invoke Edge Function to create Razorpay Order
-      const { data: order, error: orderError } =
-        await supabase.functions.invoke("create-razorpay-order", {
-          body: { bookingId: booking.id, amount: total, clerkUserId },
-        });
-
-      if (orderError || !order?.id) {
-        // FunctionsHttpError only exposes a generic message by default —
-        // the real reason is in the response body, so read it explicitly.
-        let realReason =
-          "Could not initiate payment session. Please try again.";
-        try {
-          const context = (orderError as any)?.context;
-          if (context && typeof context.json === "function") {
-            const body = await context.json();
-            realReason = body?.error || realReason;
-            console.error("Razorpay Order Creation Error (real reason):", body);
-          } else {
-            console.error("Razorpay Order Creation Error:", orderError);
-          }
-        } catch (parseErr) {
-          console.error(
-            "Could not parse error response:",
-            parseErr,
-            orderError,
-          );
+    RazorpayCheckout.open(options)
+      .then((data: any) => {
+        saveBookingToSupabase(data.razorpay_payment_id);
+      })
+      .catch((error: any) => {
+        setIsSubmitting(false);
+        // Error code 2 matlab user ne cancel kiya hai
+        if (error.code !== 2) {
+          // 🚀 Error description nahi hai toh poora error print karwa lenge
+          const errorMsg =
+            error.description || error.message || JSON.stringify(error) || "Unknown error";
+          Alert.alert("Payment Failed", `Reason: ${errorMsg}`);
+          console.log("Razorpay Error:", error);
         }
-
-        Alert.alert("Payment Error", realReason);
-        setProcessing(false);
-        return;
-      }
-
-      // 3. Open Razorpay Checkout Modal
-      openCheckout(
-        {
-          key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID!,
-          amount: order.amount,
-          currency: "INR",
-          order_id: order.id,
-          name: "Car Wash App",
-          description: `Booking for ${selectedVehicle?.model || "Car Wash"}`,
-          prefill: { contact: bookingData.phone ?? "" },
-          theme: { color: Colors.primary || "#2563EB" },
-        },
-        {
-          onSuccess: async (data) => {
-            // Verify payment signature via Supabase Edge Function
-            const { data: result, error: verifyError } =
-              await supabase.functions.invoke("verify-razorpay-payment", {
-                body: {
-                  razorpay_order_id: data.razorpay_order_id,
-                  razorpay_payment_id: data.razorpay_payment_id,
-                  razorpay_signature: data.razorpay_signature,
-                  bookingId: booking.id,
-                },
-              });
-
-            setProcessing(false);
-
-            if (verifyError || !result?.verified) {
-              Alert.alert(
-                "Verification Failed",
-                "Payment completed but signature verification failed. Please contact support if money was deducted.",
-              );
-              return;
-            }
-
-            Alert.alert(
-              "Success 🎉",
-              "Your booking has been successfully confirmed!",
-              [
-                {
-                  text: "View Bookings",
-                  onPress: () => router.replace("/(tabs)/bookings"),
-                },
-              ],
-            );
-          },
-          onFailure: (error) => {
-            setProcessing(false);
-            console.log("Full Razorpay error:", JSON.stringify(error, null, 2));
-            Alert.alert(
-              "Payment Cancelled",
-              "Payment transaction was not completed. Please try again.",
-            );
-          },
-          onClose: () => {
-            setProcessing(false);
-          },
-        },
-      );
-    } catch (err: any) {
-      console.error("Unexpected Payment Error:", err);
-      setProcessing(false);
-      Alert.alert(
-        "Error",
-        err.message || "Something went wrong. Please try again.",
-      );
-    }
+      });
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <PaymentSummary bookingData={bookingData} onTotalChange={setTotal} />
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>Booking Summary</Text>
+
+        <View style={styles.card}>
+          {selectedServices.map((service) => (
+            <View key={service.id} style={styles.row}>
+              <Text style={styles.serviceTitle}>{service.title}</Text>
+              <Text style={styles.servicePrice}>₹{service.price}</Text>
+            </View>
+          ))}
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Type:</Text>
+            <Text style={styles.infoValue}>{params.serviceType?.toUpperCase()}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Date & Time:</Text>
+            <Text style={styles.infoValue}>{params.date || "Not Selected"}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Location:</Text>
+            <Text style={styles.infoValue} numberOfLines={2}>
+              {params.addressText}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.row}>
+            <Text style={styles.infoLabel}>Subtotal</Text>
+            <Text style={styles.servicePrice}>₹{subTotal}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.infoLabel}>GST (18%)</Text>
+            <Text style={styles.servicePrice}>₹{gst}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.infoLabel}>Platform Fee</Text>
+            <Text style={styles.servicePrice}>₹{platformFee}</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.row}>
+            <Text style={styles.totalLabel}>Grand Total</Text>
+            <Text style={styles.totalValue}>₹{grandTotal}</Text>
+          </View>
+        </View>
       </ScrollView>
 
-      {/* Footer CTA */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.payBtn, processing && styles.disabledBtn]}
-          onPress={handleMakePayment}
-          activeOpacity={0.8}
-          disabled={processing}
-        >
-          {processing ? (
-            <ActivityIndicator color="#FFF" size="small" />
-          ) : (
-            <Text style={styles.btnText}>
-              {total > 0 ? `Make Payment • ₹${total}` : "Make Payment"}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {RazorpayUI}
-    </View>
+      <TouchableOpacity
+        style={styles.confirmBtn}
+        onPress={handlePaymentAndBooking}
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? (
+          <ActivityIndicator color="#FFF" />
+        ) : (
+          <Text style={styles.confirmBtnText}>Pay ₹{grandTotal} & Book</Text>
+        )}
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFF",
-    paddingTop: 10,
+  container: { flex: 1, backgroundColor: Colors.background, padding: 16 },
+  content: { paddingBottom: 100 },
+  title: { fontSize: 24, fontWeight: "bold", color: Colors.text, marginBottom: 20 },
+  card: {
+    backgroundColor: Colors.surface,
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  scrollContent: {
-    paddingBottom: 110,
+  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
+  infoRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  infoLabel: { fontSize: 14, color: Colors.textSecondary },
+  infoValue: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: "500",
+    maxWidth: "60%",
+    textAlign: "right",
   },
-  footer: {
+  serviceTitle: { fontSize: 16, color: Colors.textSecondary },
+  servicePrice: { fontSize: 16, color: Colors.text, fontWeight: "600" },
+  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
+  totalLabel: { fontSize: 18, fontWeight: "bold", color: Colors.text },
+  totalValue: { fontSize: 20, fontWeight: "900", color: Colors.primary },
+  confirmBtn: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: Colors.primary,
     padding: 16,
-    backgroundColor: "#FFF",
-    borderTopWidth: 1,
-    borderColor: Colors.border || "#E5E7EB",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  payBtn: {
-    backgroundColor: "#16A34A",
-    paddingVertical: 15,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -287,4 +229,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
+  confirmBtnText: { color: "#FFF", fontSize: 18, fontWeight: "bold" },
 });
