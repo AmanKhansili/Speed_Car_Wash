@@ -20,7 +20,10 @@ import UserInfoCard from "@/components/profile/userInfoCard";
 import MembershipBanner from "@/components/profile/MembershipBanner";
 import ProfileStats from "@/components/profile/ProfileStats";
 import ProfileMenuList from "@/components/profile/ProfileMenuList";
-import MyVehiclesSection, { Vehicle } from "@/components/profile/MyVehiclesSection";
+import MyVehiclesSection, {
+  Vehicle,
+} from "@/components/profile/MyVehiclesSection";
+import AuthGate from "@/components/auth/AuthGate";
 
 interface SupabaseProfile {
   phone: string | null;
@@ -37,10 +40,11 @@ interface UserStats {
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useClerk();
-  const { user, isLoaded: isClerkLoaded } = useUser();
+  const { user, isLoaded: isClerkLoaded, isSignedIn } = useUser();
 
   // Local States
-  const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
+  const [supabaseProfile, setSupabaseProfile] =
+    useState<SupabaseProfile | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [stats, setStats] = useState<UserStats>({
     totalBookings: 0,
@@ -129,8 +133,11 @@ export default function ProfileScreen() {
     useCallback(() => {
       if (isClerkLoaded && user) {
         fetchUserData();
+      } else if (isClerkLoaded && !user) {
+        // Not signed in — nothing to fetch, stop the loading state
+        setIsLoading(false);
       }
-    }, [isClerkLoaded, user, fetchUserData])
+    }, [isClerkLoaded, user, fetchUserData]),
   );
 
   const handleSavePhone = async () => {
@@ -145,7 +152,7 @@ export default function ProfileScreen() {
           phone: phoneInput.trim(),
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "clerk_user_id" }
+        { onConflict: "clerk_user_id" },
       );
 
       if (error) throw error;
@@ -189,7 +196,8 @@ export default function ProfileScreen() {
     ]);
   };
 
-  if (!isClerkLoaded || isLoading) {
+  // 1️⃣ Clerk still figuring out auth state — show spinner
+  if (!isClerkLoaded) {
     return (
       <View style={[styles.container, styles.loadingCenter]}>
         <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
@@ -197,6 +205,21 @@ export default function ProfileScreen() {
     );
   }
 
+  // 2️⃣ Not signed in — show AuthGate (this now actually gets reached)
+  if (!isSignedIn) {
+    return <AuthGate />;
+  }
+
+  // 3️⃣ Signed in, but Supabase data still loading — show spinner
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingCenter]}>
+        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+      </View>
+    );
+  }
+
+  // 4️⃣ Signed in + data ready — show the actual profile
   return (
     <View style={styles.container}>
       {/* Header Bar */}
@@ -207,7 +230,11 @@ export default function ProfileScreen() {
           activeOpacity={0.7}
           onPress={() => router.push("/settings" as any)}
         >
-          <Ionicons name="settings-outline" size={22} color={Colors.text || "#0F172A"} />
+          <Ionicons
+            name="settings-outline"
+            size={22}
+            color={Colors.text || "#0F172A"}
+          />
         </TouchableOpacity>
       </View>
 

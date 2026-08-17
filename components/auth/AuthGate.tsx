@@ -44,7 +44,7 @@ export default function AuthGate() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value);
-  const goHome = () => router.replace("/(tabs)");
+  const goHome = () => router.push("/(tabs)");
 
   // 1️⃣ Google Auth
   const handleGoogleAuth = async () => {
@@ -60,7 +60,6 @@ export default function AuthGate() {
     }
   };
 
-  // 2️⃣ Sign In / Sign Up
   const handleEmailAuth = async () => {
     setError(null);
 
@@ -88,7 +87,6 @@ export default function AuthGate() {
     }
   };
 
-  // 3️⃣ Email OTP Verification (Sign Up)
   const handleVerifyCode = async () => {
     setError(null);
 
@@ -169,7 +167,6 @@ export default function AuthGate() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -182,7 +179,6 @@ export default function AuthGate() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.container}>
-              {/* Top Header Row with Skip Button */}
               <View style={styles.headerRow}>
                 <TouchableOpacity
                   style={styles.skipBtn}
@@ -199,7 +195,6 @@ export default function AuthGate() {
               </View>
 
               <View style={styles.content}>
-                {/* Brand Logo Container */}
                 <View style={styles.brandContainer}>
                   <View style={styles.iconWrapper}>
                     <Image
@@ -211,7 +206,6 @@ export default function AuthGate() {
                   <Text style={styles.appName}>SPEED CAR WASH</Text>
                 </View>
 
-                {/* 🟢 VIEW 1: Verify Email */}
                 {mode === "verifyEmail" ? (
                   <>
                     <Text style={styles.title}>Check Your Email</Text>
@@ -598,18 +592,13 @@ export default function AuthGate() {
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
-    </SafeAreaView>
   );
 }
 
 const PRIMARY_COLOR = Colors?.primary || "#5B4DFB";
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  flex: { flex: 1 },
+  flex: { flex: 1 ,zIndex:99 },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: "center",

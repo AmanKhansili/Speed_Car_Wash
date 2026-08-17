@@ -19,11 +19,6 @@ export default function TabLayout() {
     );
   }
 
-  // Signed-out hai toh yahan koi kaam nahi — wapas index par bhej do
-  if (!isSignedIn) {
-    return <Redirect href="/" />;
-  }
-
   return (
     <Tabs
       screenOptions={{

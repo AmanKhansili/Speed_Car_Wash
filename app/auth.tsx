@@ -6,7 +6,6 @@ export default function AuthScreen() {
   return (
     <View style={styles.container}>
       <AuthGate />
-      
     </View>
   );
 }

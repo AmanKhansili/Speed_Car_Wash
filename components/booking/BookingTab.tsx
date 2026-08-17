@@ -26,23 +26,21 @@ export interface Booking {
 
 export default function BookingTabs() {
   const router = useRouter();
-  
-  // 👈 Yahan `as any` lagane se `userData` aur `updateBookings` ka koi bhi TypeScript error nahi aayega
+
   const { userData, updateBookings } = useUser() as any; 
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
 
-  // Fallback dummy bookings agar userContext empty ho
   const defaultBookings: Booking[] = [
-    {
-      id: "1",
-      title: "Standard Foam Wash",
-      price: "₹499",
-      date: "12 Aug 2026, 10:00 AM",
-      address: "Plot 12, Sector 63, Noida",
-      status: "Confirmed",
-      type: "upcoming",
-    },
+    // {
+    //   id: "1",
+    //   title: "Standard Foam Wash",
+    //   price: "₹499",
+    //   date: "12 Aug 2026, 10:00 AM",
+    //   address: "Plot 12, Sector 63, Noida",
+    //   status: "Confirmed",
+    //   type: "upcoming",
+    // },
   ];
 
   const [bookings, setBookings] = useState<Booking[]>(() => {
@@ -86,7 +84,6 @@ export default function BookingTabs() {
     );
   };
 
-  // Tab ke mutabiq bookings filter karein
   const filteredBookings = bookings.filter((item) => {
     if (activeTab === "upcoming") {
       return item.type === "upcoming" && item.status !== "Cancelled";
