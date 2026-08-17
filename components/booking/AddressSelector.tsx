@@ -1,9 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import Colors from "@/constants/colors";
-import { Address, AddressSelectorProps } from "@/types/service";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import * as Location from "expo-location";
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +11,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import Colors from "@/constants/colors";
+import { Address, AddressSelectorProps } from "@/types/service";
+import { useAuth } from "@clerk/expo";
+import { createClerkSupabaseClient } from "@/utils/supabase";
 
 export const SAVED_ADDRESSES: Address[] = [];
 
@@ -22,15 +24,52 @@ export default function AddressSelector({
   selectedAddressId,
   onSelectAddress,
 }: AddressSelectorProps) {
-  const [addresses, setAddresses] = useState<Address[]>(SAVED_ADDRESSES);
+  const { userId: clerkUserId, getToken } = useAuth();
+
+  // Same pattern as Step4SummaryScreen — memoized so it doesn't rebuild every render
+  const supabase = useMemo(
+    () => createClerkSupabaseClient(getToken),
+    [getToken],
+  );
+
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [isFetching, setIsFetching] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [tag, setTag] = useState<"Home" | "Work" | "Other">("Home");
   const [address, setaddress] = useState("");
   const [landmark, setLandmark] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
+
+  // 0. Fetch saved addresses for this user on mount
+  useEffect(() => {
+    const fetchAddresses = async () => {
+      if (!clerkUserId) {
+        setIsFetching(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("addresses")
+          .select("id, tag, address_line_1, landmark, latitude, longitude")
+          .eq("clerk_user_id", clerkUserId)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.error("Fetch Addresses Error:", error);
+          return;
+        }
+        setAddresses((data as Address[]) ?? []);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    fetchAddresses();
+  }, [clerkUserId]);
 
   // 1. Fetch Current Location (GPS)
   const handleUseCurrentLocation = async () => {
@@ -65,38 +104,62 @@ export default function AddressSelector({
         setIsModalVisible(true);
       }
     } catch (error) {
-      Alert.alert("Location Error", "Could not fetch current location. Please fill manually.");
+      Alert.alert(
+        "Location Error",
+        "Could not fetch current location. Please fill manually.",
+      );
     } finally {
       setIsLocating(false);
     }
   };
 
-  // 2. Save New Address
-  const handleSaveAddress = () => {
+  // 2. Save New Address — persists to Supabase (real UUID, matches FK on bookings.address_id)
+  const handleSaveAddress = async () => {
     if (!address.trim()) {
-      Alert.alert("Missing Details", "Please fill Address Line 1.");
+      Alert.alert("Missing Details", "Please fill Address.");
+      return;
+    }
+    if (!clerkUserId) {
+      Alert.alert("Error", "You must be logged in to save an address.");
       return;
     }
 
-    const newAddress: Address = {
-      id: Date.now().toString(),
-      tag,
-      address,
-      landmark: landmark.trim() || undefined,
-      latitude: latitude ?? undefined,
-      longitude: longitude ?? undefined,
-    };
+    try {
+      setIsSaving(true);
 
-    setAddresses((prev) => [newAddress, ...prev]);
-    onSelectAddress(newAddress.id, newAddress.address);
+      const { data, error } = await supabase
+        .from("addresses")
+        .insert({
+          clerk_user_id: clerkUserId,
+          tag,
+          address_line_1: address.trim(),
+          landmark: landmark.trim() || null,
+          latitude,
+          longitude,
+        })
+        .select("id, tag, address_line_1, landmark, latitude, longitude")
+        .single();
 
-    // Reset & Close Modal
-    setaddress("");
-    setLandmark("");
-    setTag("Home");
-    setLatitude(null);
-    setLongitude(null);
-    setIsModalVisible(false);
+      if (error || !data) {
+        console.error("Save Address Error:", error);
+        Alert.alert("Error", "Could not save address. Please try again.");
+        return;
+      }
+
+      const savedAddress = data as Address;
+      setAddresses((prev) => [savedAddress, ...prev]);
+      onSelectAddress(savedAddress.id, savedAddress.address_line_1);
+
+      // Reset & Close Modal
+      setaddress("");
+      setLandmark("");
+      setTag("Home");
+      setLatitude(null);
+      setLongitude(null);
+      setIsModalVisible(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getTagIcon = (tagType?: string) => {
@@ -140,54 +203,89 @@ export default function AddressSelector({
           <ActivityIndicator size="small" color={Colors.primary} />
         ) : (
           <>
-            <MaterialIcons name="my-location" size={18} color={Colors.primary} />
+            <MaterialIcons
+              name="my-location"
+              size={18}
+              color={Colors.primary}
+            />
             <Text style={styles.currentLocText}>Use Current Location</Text>
           </>
         )}
       </TouchableOpacity>
 
       {/* Address Cards List */}
-      <View style={styles.addressList}>
-        {addresses.map((item) => {
-          const isSelected = item.id === selectedAddressId;
+      {isFetching ? (
+        <ActivityIndicator
+          size="small"
+          color={Colors.primary}
+          style={{ marginTop: 12 }}
+        />
+      ) : (
+        <View style={styles.addressList}>
+          {addresses.map((item) => {
+            const isSelected = item.id === selectedAddressId;
 
-          return (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.85}
-              style={[styles.addressCard, isSelected && styles.selectedAddressCard]}
-              onPress={() => onSelectAddress(item.id, item.address)}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.tagWrapper}>
-                  <Ionicons
-                    name={getTagIcon(item.tag)}
-                    size={14}
-                    color={isSelected ? Colors.primary : Colors.textSecondary}
-                  />
-                  <Text style={[styles.tagText, isSelected && styles.selectedTagText]}>
-                    {item.tag}
-                  </Text>
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.85}
+                style={[
+                  styles.addressCard,
+                  isSelected && styles.selectedAddressCard,
+                ]}
+                onPress={() => onSelectAddress(item.id, item.address_line_1)}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.tagWrapper}>
+                    <Ionicons
+                      name={getTagIcon(item.tag)}
+                      size={14}
+                      color={isSelected ? Colors.primary : Colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.tagText,
+                        isSelected && styles.selectedTagText,
+                      ]}
+                    >
+                      {item.tag}
+                    </Text>
+                  </View>
+
+                  {/* Radio Circle */}
+                  <View
+                    style={[
+                      styles.radioOuter,
+                      isSelected && styles.radioOuterSelected,
+                    ]}
+                  >
+                    {isSelected && <View style={styles.radioInner} />}
+                  </View>
                 </View>
 
-                {/* Radio Circle */}
-                <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
-                  {isSelected && <View style={styles.radioInner} />}
-                </View>
-              </View>
+                <Text style={styles.addressLine1}>{item.address_line_1}</Text>
 
-              <Text style={styles.address}>{item.address}</Text>
+                {item.landmark && (
+                  <View style={styles.landmarkWrapper}>
+                    <Ionicons
+                      name="navigate-outline"
+                      size={12}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.landmarkText}>{item.landmark}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
 
-              {item.landmark && (
-                <View style={styles.landmarkWrapper}>
-                  <Ionicons name="navigate-outline" size={12} color={Colors.textSecondary} />
-                  <Text style={styles.landmarkText}>{item.landmark}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+          {addresses.length === 0 && (
+            <Text style={styles.landmarkText}>
+              No saved addresses yet — tap &ldquo;Add New&rdquo; to add one.
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* ADD ADDRESS MODAL FORM */}
       <Modal visible={isModalVisible} animationType="slide" transparent>
@@ -207,17 +305,25 @@ export default function AddressSelector({
                 {(["Home", "Work", "Other"] as const).map((type) => (
                   <TouchableOpacity
                     key={type}
-                    style={[styles.tagChip, tag === type && styles.selectedTagChip]}
+                    style={[
+                      styles.tagChip,
+                      tag === type && styles.selectedTagChip,
+                    ]}
                     onPress={() => setTag(type)}
                   >
-                    <Text style={[styles.tagChipText, tag === type && styles.selectedTagChipText]}>
+                    <Text
+                      style={[
+                        styles.tagChipText,
+                        tag === type && styles.selectedTagChipText,
+                      ]}
+                    >
                       {type}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* Address Line 1 - Textarea (multiline) */}
+              {/* Address - Textarea (multiline) */}
               <Text style={styles.inputLabel}>Address*</Text>
               <TextInput
                 style={styles.textArea}
@@ -241,11 +347,16 @@ export default function AddressSelector({
               />
 
               <TouchableOpacity
-                style={styles.saveBtn}
+                style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
                 activeOpacity={0.8}
                 onPress={handleSaveAddress}
+                disabled={isSaving}
               >
-                <Text style={styles.saveBtnText}>Save Address</Text>
+                {isSaving ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Save Address</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -273,7 +384,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
-  addBtnText: { fontSize: 13, fontWeight: "600", color: Colors.primary, marginLeft: 2 },
+  addBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.primary,
+    marginLeft: 2,
+  },
 
   /* Current Location Button */
   currentLocBtn: {
@@ -299,7 +415,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.border,
   },
-  selectedAddressCard: { borderColor: Colors.primary, backgroundColor: "#F0F5FF" },
+  selectedAddressCard: {
+    borderColor: Colors.primary,
+    backgroundColor: "#F0F5FF",
+  },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -327,11 +446,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   radioOuterSelected: { borderColor: Colors.primary },
-  radioInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary },
+  radioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+  },
   address: { fontSize: 14, fontWeight: "700", color: "#111827" },
-  addressLine2: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2 },
-  landmarkWrapper: { flexDirection: "row", alignItems: "center", marginTop: 6, gap: 4 },
-  landmarkText: { fontSize: 11.5, color: Colors.textSecondary, fontStyle: "italic" },
+  addressLine1: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2 },
+  landmarkWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+    gap: 4,
+  },
+  landmarkText: {
+    fontSize: 11.5,
+    color: Colors.textSecondary,
+    fontStyle: "italic",
+  },
 
   /* Modal Form Styles */
   modalOverlay: {
@@ -353,7 +486,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
-  inputLabel: { fontSize: 13, fontWeight: "600", color: "#374151", marginTop: 12, marginBottom: 6 },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+    marginTop: 12,
+    marginBottom: 6,
+  },
 
   /* Simple single-line input (Landmark) */
   input: {

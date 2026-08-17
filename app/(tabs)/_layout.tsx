@@ -1,10 +1,24 @@
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
+import { useUser } from "@clerk/expo";
+import { View, ActivityIndicator } from "react-native";
 import React from "react";
 
+
 export default function TabLayout() {
+  const { isLoaded, isSignedIn } = useUser();
+
+  // Clerk state load hone tak spinner
+  if (!isLoaded) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -26,7 +40,7 @@ export default function TabLayout() {
           shadowRadius: 10,
         },
         tabBarItemStyle: {
-          paddingVertical: 8, 
+          paddingVertical: 8,
         },
       }}
     >

@@ -33,7 +33,7 @@ export interface PaymentSummaryProps {
 export interface Address {
   id: string;
   tag: "Home" | "Work" | "Other";
-  address: string;
+  address_line_1: string;
   landmark?: string;
   latitude?: number;
   longitude?: number;
@@ -42,6 +42,6 @@ export interface Address {
 
 export interface AddressSelectorProps {
   selectedAddressId: string;
-  onSelectAddress: (id: string, fullAddressString: string) => void;
+  onSelectAddress: (id: string, addressLine1: string) => void;
   onAddNewAddress?: () => void;
 }

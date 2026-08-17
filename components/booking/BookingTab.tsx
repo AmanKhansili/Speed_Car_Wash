@@ -28,12 +28,32 @@ export interface Booking {
 
 export default function BookingTabs() {
   const router = useRouter();
-  const { userData } = useUser() as any;
+
+  const { userData, /*updateBookings*/ } = useUser() as any; 
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const defaultBookings: Booking[] = [
+    // {
+    //   id: "1",
+    //   title: "Standard Foam Wash",
+    //   price: "₹499",
+    //   date: "12 Aug 2026, 10:00 AM",
+    //   address: "Plot 12, Sector 63, Noida",
+    //   status: "Confirmed",
+    //   type: "upcoming",
+    // },
+  ];
+
+  const [bookings, setBookings] = useState<Booking[]>(() => {
+    if (userData?.bookings && Array.isArray(userData.bookings) && userData.bookings.length > 0) {
+      return userData.bookings as Booking[];
+    }
+    return defaultBookings;
+  });
+
+  // Sync with UserContext changes safely
   // 🚀 Fetch Bookings directly from Supabase
   useEffect(() => {
     fetchSupabaseBookings();
@@ -103,7 +123,7 @@ export default function BookingTabs() {
               return item;
             });
             setBookings(updated);
-          } catch (err) {
+          } catch (err:any) {
             Alert.alert("Error", "Could not cancel booking");
           }
         },

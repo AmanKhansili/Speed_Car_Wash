@@ -2,9 +2,10 @@ import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
 import Shadow from "@/constants/shadow";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo"; 
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import VehicleSelector from "@/components/booking/VehicleSelector";
 import useUser from "@/context/userContext";
@@ -14,10 +15,10 @@ import { useBookingStore } from "../../store/bookingStore";
 
 export default function Step1SelectionScreen() {
   const router = useRouter();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   const { selectVehicle } = useUser();
   const { selectedServices, removeService, getTotalPrice } = useBookingStore();
 
-  // Step 2 ki tarah clean state (pehle se koi gaadi select nahi hogi)
   const [selectedVehicle, setSelectedVehicle] = useState<string>("");
 
   const handleVehicleSelect = (id: string) => {
@@ -25,7 +26,6 @@ export default function Step1SelectionScreen() {
     selectVehicle(id);
   };
 
-  // STEP 2 WALA EXACT VALIDATION PATTERN
   const handleContinue = () => {
     if (!selectedVehicle) {
       Alert.alert("Vehicle Required", "Please select or add a vehicle to proceed.");
@@ -42,6 +42,28 @@ export default function Step1SelectionScreen() {
       params: { vehicleId: selectedVehicle },
     });
   };
+
+  if (!isLoaded) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+      </View>
+    );
+  }
+
+  if (!isSignedIn || !userId) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.errorText}>Please log in to make a booking.</Text>
+        <TouchableOpacity
+          style={styles.loginBtn}
+          onPress={() => router.replace("/" as any)}
+        >
+          <Text style={styles.loginBtnText}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -66,7 +88,7 @@ export default function Step1SelectionScreen() {
                 <View key={service.id}>
                   <View style={styles.cartItem}>
                     <View style={styles.cartItemLeft}>
-                      <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                      <Ionicons name="checkmark-circle" size={20} color={Colors.primary || "#2563EB"} />
                       <Text style={styles.cartItemTitle}>{service.title}</Text>
                     </View>
                     <View style={styles.cartItemRight}>
@@ -118,7 +140,28 @@ export default function Step1SelectionScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F6F8" },
+  center: { justifyContent: "center", alignItems: "center", padding: 20 },
   scrollContent: { padding: 16, paddingBottom: 120 },
+
+  // Missing authentication state styles
+  errorText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.text || "#1F2937",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  loginBtn: {
+    backgroundColor: Colors.primary || "#2563EB",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: Radius.round || 9999,
+  },
+  loginBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
 
   cartSection: { marginTop: 24 },
   cartHeader: {
@@ -127,13 +170,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "800", color: Colors.text },
-  addMoreText: { fontSize: 14, fontWeight: "700", color: Colors.primary },
+  sectionTitle: { fontSize: 18, fontWeight: "800", color: Colors.text || "#1F2937" },
+  addMoreText: { fontSize: 14, fontWeight: "700", color: Colors.primary || "#2563EB" },
   cartCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
+    backgroundColor: Colors.surface || "#FFFFFF",
+    borderRadius: Radius.xl || 16,
     padding: 16,
-    ...Shadow.light,
+    ...(Shadow.light || {}),
   },
   cartItem: {
     flexDirection: "row",
@@ -142,11 +185,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   cartItemLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  cartItemTitle: { fontSize: 15, fontWeight: "600", color: Colors.text, flexShrink: 1 },
+  cartItemTitle: { fontSize: 15, fontWeight: "600", color: Colors.text || "#1F2937", flexShrink: 1 },
   cartItemRight: { flexDirection: "row", alignItems: "center", gap: 16 },
-  cartItemPrice: { fontSize: 15, fontWeight: "700", color: Colors.text },
-  deleteBtn: { padding: 4, backgroundColor: "#FEE2E2", borderRadius: Radius.md },
-  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 8 },
+  cartItemPrice: { fontSize: 15, fontWeight: "700", color: Colors.text || "#1F2937" },
+  deleteBtn: { padding: 4, backgroundColor: "#FEE2E2", borderRadius: Radius.md || 8 },
+  divider: { height: 1, backgroundColor: Colors.border || "#E5E7EB", marginVertical: 8 },
   billTotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -154,28 +197,28 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: Colors.border || "#E5E7EB",
     borderStyle: "dashed",
   },
-  billTotalText: { fontSize: 14, fontWeight: "600", color: Colors.textSecondary },
-  billTotalAmount: { fontSize: 18, fontWeight: "800", color: Colors.text },
+  billTotalText: { fontSize: 14, fontWeight: "600", color: Colors.textSecondary || "#6B7280" },
+  billTotalAmount: { fontSize: 18, fontWeight: "800", color: Colors.text || "#1F2937" },
 
   emptyCart: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
+    backgroundColor: Colors.surface || "#FFFFFF",
+    borderRadius: Radius.xl || 16,
     padding: 32,
     alignItems: "center",
-    ...Shadow.light,
+    ...(Shadow.light || {}),
   },
-  emptyCartText: { fontSize: 15, color: Colors.textSecondary, marginTop: 12, marginBottom: 16 },
+  emptyCartText: { fontSize: 15, color: Colors.textSecondary || "#6B7280", marginTop: 12, marginBottom: 16 },
   browseBtn: {
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: Colors.primary || "#2563EB",
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: Radius.round,
+    borderRadius: Radius.round || 9999,
   },
-  browseBtnText: { color: Colors.primary, fontWeight: "700" },
+  browseBtnText: { color: Colors.primary || "#2563EB", fontWeight: "700" },
 
   bottomBar: {
     position: "absolute",
@@ -197,14 +240,14 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   bottomTotalContainer: { flex: 1 },
-  bottomTotalLabel: { fontSize: 12, color: Colors.textSecondary, fontWeight: "600" },
-  bottomTotalValue: { fontSize: 20, fontWeight: "900", color: Colors.text },
+  bottomTotalLabel: { fontSize: 12, color: Colors.textSecondary || "#6B7280", fontWeight: "600" },
+  bottomTotalValue: { fontSize: 20, fontWeight: "900", color: Colors.text || "#1F2937" },
 
   continueBtn: {
     backgroundColor: Colors.primary || "#2563EB",
     paddingVertical: 14,
     paddingHorizontal: 24,
-    borderRadius: Radius.round,
+    borderRadius: Radius.round || 9999,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,

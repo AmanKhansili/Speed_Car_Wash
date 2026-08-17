@@ -2,8 +2,12 @@ import Colors from "@/constants/colors";
 import Shadow from "@/constants/shadow";
 import { PaymentSummaryProps } from "@/types/service";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+
+interface ExtendedPaymentSummaryProps extends PaymentSummaryProps {
+  onTotalChange?: (total: number) => void;
+}
 
 export default function PaymentSummary({
   bookingData,
@@ -11,7 +15,8 @@ export default function PaymentSummary({
   taxes: customTaxes,
   discount: initialDiscount = 0,
   convenienceFee = 49,
-}: PaymentSummaryProps) {
+  onTotalChange,
+}: ExtendedPaymentSummaryProps) {
   const [couponCode, setCouponCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(initialDiscount);
   const [couponApplied, setCouponApplied] = useState(false);
@@ -33,14 +38,12 @@ export default function PaymentSummary({
       return numeric ? parseInt(numeric, 10) : 599;
     }
 
-    return 599; // Default fallback price
+    return 599;
   };
 
   const basePrice = getCalculatedBasePrice();
-  // Dynamic 18% GST calculation (agar custom taxes na mile to)
   const taxes = customTaxes ?? Math.round(basePrice * 0.18);
 
-  // Apply Coupon Handler
   const handleApplyCoupon = () => {
     if (couponCode.trim().toUpperCase() === "FIRST100") {
       setAppliedDiscount(100);
@@ -57,6 +60,11 @@ export default function PaymentSummary({
   };
 
   const grandTotal = Math.max(0, basePrice + taxes + convenienceFee - appliedDiscount);
+
+  // Parent ko total bhejo jab bhi change ho
+  useEffect(() => {
+    onTotalChange?.(grandTotal);
+  }, [grandTotal]);
 
   return (
     <View style={styles.container}>
@@ -99,7 +107,6 @@ export default function PaymentSummary({
         <Text style={styles.sectionTitle}>Payment Breakdown</Text>
       </View>
 
-      {/* 2. Coupon / Promo Code Card */}
       <View style={styles.couponCard}>
         {!couponApplied ? (
           <View style={styles.couponInputWrapper}>
@@ -136,7 +143,6 @@ export default function PaymentSummary({
         )}
       </View>
 
-      {/* 3. Bill Breakdown Box */}
       <View style={styles.summaryCard}>
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Item Total (Service Price)</Text>
@@ -160,10 +166,8 @@ export default function PaymentSummary({
           </View>
         )}
 
-        {/* Divider */}
         <View style={styles.divider} />
 
-        {/* Grand Total */}
         <View style={styles.rowTotal}>
           <View>
             <Text style={styles.totalLabel}>Total Amount</Text>
@@ -175,7 +179,6 @@ export default function PaymentSummary({
         </View>
       </View>
 
-      {/* 4. Trust & Safety Banner */}
       <View style={styles.trustBanner}>
         <Ionicons name="shield-checkmark-outline" size={16} color={Colors.primary} />
         <Text style={styles.trustText}>Safe & Secure Payments • 100% Satisfaction Guarantee</Text>
@@ -189,7 +192,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 28,
   },
-  /* Booking Overview Card */
   overviewCard: {
     backgroundColor: Colors.surface,
     borderRadius: 14,
@@ -220,7 +222,6 @@ const styles = StyleSheet.create({
     color: Colors.text,
     flex: 1,
   },
-
   sectionHeader: {
     marginBottom: 12,
   },
@@ -229,8 +230,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.text,
   },
-
-  /* Coupon Box */
   couponCard: {
     backgroundColor: Colors.surface,
     borderRadius: 14,
@@ -282,8 +281,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#16A34A",
   },
-
-  /* Summary Card */
   summaryCard: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
@@ -344,8 +341,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: Colors.primary,
   },
-
-  /* Trust Banner */
   trustBanner: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,12 +1,18 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Redirect } from "expo-router";
-import { useAuth } from "@clerk/expo";
+import { useUser } from "@clerk/expo";
 import { View, ActivityIndicator } from "react-native";
 import Colors from "@/constants/colors";
 import AuthGate from "@/components/auth/AuthGate";
+import { syncUserToSupabase } from "@/utils/saveUser";
 
 export default function Index() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, user } = useUser();
+  useEffect(() => {
+    if (isLoaded && isSignedIn && user) {
+      syncUserToSupabase(user);
+    }
+  }, [isLoaded, isSignedIn, user]);
 
   // Jab tak Clerk state load ho rahi hai, loading spinner dikhayein
   if (!isLoaded) {
@@ -22,6 +28,6 @@ export default function Index() {
     return <Redirect href="/(tabs)" />;
   }
 
-  // Agar signed-out hai, toh naya Google/Email wala AuthGate render karein
+  // Agar signed-out hai, toh Google/Email wala AuthGate render karein
   return <AuthGate />;
 }

@@ -1,61 +1,68 @@
-import Colors from "@/constants/colors";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import Colors from "@/constants/colors";
 
 export interface MenuItem {
   id: string;
   title: string;
   subtitle: string;
   icon: keyof typeof Ionicons.glyphMap;
+  route?: string;
   iconColor?: string;
   bgColor?: string;
   isDanger?: boolean;
 }
 
-const MENU_ITEMS: MenuItem[] = [
+const PRIMARY_ITEMS: MenuItem[] = [
   {
     id: "bookings",
     title: "My Bookings",
     subtitle: "View and manage your bookings",
     icon: "calendar-outline",
-    bgColor: "#b3d2f4",
+    route: "/bookings",
+    bgColor: "#EEF2FF",
   },
   {
     id: "membership",
     title: "Membership & Plans",
     subtitle: "Manage your membership",
     icon: "ribbon-outline",
-    bgColor: "#b3d2f4",
+    route: "/membership",
+    bgColor: "#EEF2FF",
   },
   {
     id: "payments",
     title: "Payment Methods",
     subtitle: "Cards, UPI & Wallets",
     icon: "card-outline",
-    bgColor: "#b3d2f4",
+    route: "/payments",
+    bgColor: "#EEF2FF",
   },
   {
     id: "vehicles",
     title: "My Vehicles",
     subtitle: "Manage your cars",
     icon: "car-outline",
-    bgColor: "#b3d2f4",
+    route: "/vehicles",
+    bgColor: "#EEF2FF",
   },
   {
     id: "saved_services",
     title: "Saved Services",
     subtitle: "Your favorite services",
     icon: "heart-outline",
-    bgColor: "#b3d2f4",
+    route: "/saved-services",
+    bgColor: "#EEF2FF",
   },
   {
     id: "referral",
     title: "Refer & Earn",
     subtitle: "Invite friends and earn rewards",
     icon: "gift-outline",
-    bgColor: "#b3d2f4",
+    route: "/referral",
+    bgColor: "#EEF2FF",
   },
 ];
 
@@ -65,6 +72,7 @@ const SECONDARY_ITEMS: MenuItem[] = [
     title: "Help & Support",
     subtitle: "FAQs, Chat & more",
     icon: "headset-outline",
+    route: "/support",
     iconColor: "#64748B",
     bgColor: "#F1F5F9",
   },
@@ -81,28 +89,58 @@ const SECONDARY_ITEMS: MenuItem[] = [
 
 interface ProfileMenuListProps {
   onItemPress?: (id: string) => void;
+  onLogoutPress?: () => void;
 }
 
-export default function ProfileMenuList({ onItemPress }: ProfileMenuListProps) {
+export default function ProfileMenuList({
+  onItemPress,
+  onLogoutPress,
+}: ProfileMenuListProps) {
   const router = useRouter();
 
-  const handlePress = (id: string) => {
-    if (onItemPress) onItemPress(id);
+  const handlePress = (item: MenuItem) => {
+    // 1. If custom onItemPress prop provided by parent
+    if (onItemPress) {
+      onItemPress(item.id);
+    }
+
+    // 2. Handle Logout specifically
+    if (item.id === "logout") {
+      if (onLogoutPress) onLogoutPress();
+      return;
+    }
+
+    // 3. Fallback to default Expo Router navigation if route is defined
+    if (item.route) {
+      router.push(item.route as any);
+    }
   };
 
   return (
     <View style={styles.container}>
       {/* Primary Menu Group */}
       <View style={styles.menuGroup}>
-        {MENU_ITEMS.map((item, index) => (
+        {PRIMARY_ITEMS.map((item, index) => (
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.7}
-            style={[styles.menuItem, index !== MENU_ITEMS.length - 1 && styles.borderBottom]}
-            onPress={() => router.push(`/${item.id}` as any)}
+            style={[
+              styles.menuItem,
+              index !== PRIMARY_ITEMS.length - 1 && styles.borderBottom,
+            ]}
+            onPress={() => handlePress(item)}
           >
-            <View style={[styles.iconBadge, { backgroundColor: item.bgColor || "#78b7ef" }]}>
-              <Ionicons name={item.icon} size={18} color={Colors.primary} />
+            <View
+              style={[
+                styles.iconBadge,
+                { backgroundColor: item.bgColor || "#EEF2FF" },
+              ]}
+            >
+              <Ionicons
+                name={item.icon}
+                size={18}
+                color={item.iconColor || Colors.primary || "#6366F1"}
+              />
             </View>
 
             <View style={styles.textWrapper}>
@@ -116,20 +154,37 @@ export default function ProfileMenuList({ onItemPress }: ProfileMenuListProps) {
       </View>
 
       {/* Secondary Menu Group (Support & Logout) */}
-      <View style={[styles.menuGroup, styles.secondaryGroup]}>
+      <View style={styles.menuGroup}>
         {SECONDARY_ITEMS.map((item, index) => (
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.7}
-            style={[styles.menuItem, index !== SECONDARY_ITEMS.length - 1 && styles.borderBottom]}
-            onPress={() => handlePress(item.id)}
+            style={[
+              styles.menuItem,
+              index !== SECONDARY_ITEMS.length - 1 && styles.borderBottom,
+            ]}
+            onPress={() => handlePress(item)}
           >
-            <View style={[styles.iconBadge, { backgroundColor: item.bgColor || "#F1F5F9" }]}>
-              <Ionicons name={item.icon} size={18} color={item.iconColor} />
+            <View
+              style={[
+                styles.iconBadge,
+                { backgroundColor: item.bgColor || "#F1F5F9" },
+              ]}
+            >
+              <Ionicons
+                name={item.icon}
+                size={18}
+                color={item.iconColor || Colors.text || "#0F172A"}
+              />
             </View>
 
             <View style={styles.textWrapper}>
-              <Text style={[styles.menuTitle, item.isDanger && styles.dangerTitle]}>
+              <Text
+                style={[
+                  styles.menuTitle,
+                  item.isDanger && styles.dangerTitle,
+                ]}
+              >
                 {item.title}
               </Text>
               <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
@@ -146,17 +201,19 @@ export default function ProfileMenuList({ onItemPress }: ProfileMenuListProps) {
 const styles = StyleSheet.create({
   container: {
     gap: 16,
-    marginBottom: 50,
+    marginBottom: 40,
   },
   menuGroup: {
+    backgroundColor: Colors.surface || "#FFFFFF",
     borderRadius: 18,
     paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.border || "#F1F5F9",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-  },
-  secondaryGroup: {
-    marginTop: 2,
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
   },
   menuItem: {
     flexDirection: "row",
@@ -168,8 +225,8 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border || "#F1F5F9",
   },
   iconBadge: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",

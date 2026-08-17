@@ -28,7 +28,7 @@ export default function Step3LocationScreen() {
 
   // Address States
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
-  const [addressText, setAddressText] = useState<string>("");
+  const [addressText, /*setAddressText*/] = useState<string>("");
 
   const [phone, setPhone] = useState<string>(userData.mobileNumber || "");
 

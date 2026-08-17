@@ -25,6 +25,8 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-secure-store",
+      "@clerk/expo",
       "expo-router",
       [
         "expo-splash-screen",
@@ -39,20 +41,7 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "@clerk/expo",
-      "expo-secure-store",
-      "expo-web-browser",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "minSdkVersion": 24,
-            "compileSdkVersion": 36,
-            "targetSdkVersion": 34,
-            "extraProguardRules": "-keepattributes *Annotation*\n-dontwarn com.razorpay.**\n-keep class com.razorpay.** {*;}\n-optimizations !method/inlining/\n-keepclasseswithmembers class * { public void onPayment*(...); }"
-          }
-        }
-      ]
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -61,9 +50,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "c8e930d0-eda6-454d-a5c9-11b62945e23d"
+        "projectId": "9ebd2ade-5bb5-4355-b9c5-2bda709fe7fe"
       }
-    },
-    "owner": "amankhansili"
+    }
   }
 }

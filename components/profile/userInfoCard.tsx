@@ -1,11 +1,18 @@
-import Colors from "@/constants/colors";
-import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "@clerk/expo";
+import Colors from "@/constants/colors";
 
 interface UserInfoCardProps {
   isPremium?: boolean;
+  phone?: string | null;          // Sourced from Supabase
   onEditPress?: () => void;
   onChangeAvatar?: () => void;
   onAddPhone?: () => void;
@@ -14,6 +21,7 @@ interface UserInfoCardProps {
 
 export default function UserInfoCard({
   isPremium = true,
+  phone,
   onEditPress,
   onChangeAvatar,
   onAddPhone,
@@ -25,30 +33,34 @@ export default function UserInfoCard({
     return null;
   }
 
+  // Dynamic user details from Clerk with clean fallbacks
   const name =
     user?.fullName ||
     `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-    "Amanjeet Kumar";
-    
-  // 🔥 Fix: Primary email ke sath emailAddresses array se bhi check karenge
+    "User";
+
   const email =
     user?.primaryEmailAddress?.emailAddress ||
     user?.emailAddresses?.[0]?.emailAddress;
-
-  const phone =
-    user?.primaryPhoneNumber?.phoneNumber ||
-    user?.phoneNumbers?.[0]?.phoneNumber;
 
   const avatarUrl =
     user?.imageUrl ||
     "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80";
 
   return (
-    <TouchableOpacity activeOpacity={0.85} style={styles.cardContainer} onPress={onEditPress}>
+    <TouchableOpacity
+      activeOpacity={0.85}
+      style={styles.cardContainer}
+      onPress={onEditPress}
+    >
       {/* Left: Avatar with Camera Badge */}
       <View style={styles.avatarWrapper}>
         <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-        <TouchableOpacity style={styles.cameraBadge} activeOpacity={0.8} onPress={onChangeAvatar}>
+        <TouchableOpacity
+          style={styles.cameraBadge}
+          activeOpacity={0.8}
+          onPress={onChangeAvatar}
+        >
           <Ionicons name="camera" size={12} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -63,7 +75,7 @@ export default function UserInfoCard({
         {/* Member Badge */}
         {isPremium && (
           <View style={styles.badgeChip}>
-            <Ionicons name="star-outline" size={12} color={Colors.primary} />
+            <Ionicons name="star-outline" size={12} color={Colors.primary || "#6366F1"} />
             <Text style={styles.badgeText}>Premium Member</Text>
           </View>
         )}
@@ -71,12 +83,24 @@ export default function UserInfoCard({
         {/* Phone / Add Phone Option */}
         {phone ? (
           <View style={styles.detailRow}>
-            <Ionicons name="call-outline" size={13} color={Colors.textSecondary || "#64748B"} />
+            <Ionicons
+              name="call-outline"
+              size={13}
+              color={Colors.textSecondary || "#64748B"}
+            />
             <Text style={styles.detailText}>{phone}</Text>
           </View>
         ) : (
-          <TouchableOpacity style={styles.addActionRow} onPress={onAddPhone} activeOpacity={0.7}>
-            <Ionicons name="add-circle-outline" size={13} color={Colors.primary} />
+          <TouchableOpacity
+            style={styles.addActionRow}
+            onPress={onAddPhone}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={13}
+              color={Colors.primary || "#6366F1"}
+            />
             <Text style={styles.addText}>Add phone number</Text>
           </TouchableOpacity>
         )}
@@ -84,14 +108,26 @@ export default function UserInfoCard({
         {/* Email / Add Email Option */}
         {email ? (
           <View style={styles.detailRow}>
-            <Ionicons name="mail-outline" size={13} color={Colors.textSecondary || "#64748B"} />
+            <Ionicons
+              name="mail-outline"
+              size={13}
+              color={Colors.textSecondary || "#64748B"}
+            />
             <Text style={styles.detailText} numberOfLines={1}>
               {email}
             </Text>
           </View>
         ) : (
-          <TouchableOpacity style={styles.addActionRow} onPress={onAddEmail} activeOpacity={0.7}>
-            <Ionicons name="add-circle-outline" size={13} color={Colors.primary} />
+          <TouchableOpacity
+            style={styles.addActionRow}
+            onPress={onAddEmail}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={13}
+              color={Colors.primary || "#6366F1"}
+            />
             <Text style={styles.addText}>Add email address</Text>
           </TouchableOpacity>
         )}
@@ -109,81 +145,84 @@ const styles = StyleSheet.create({
   cardContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
+    elevation: 2,
   },
   avatarWrapper: {
     position: "relative",
-    marginRight: 16,
+    marginRight: 14,
   },
   avatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#F1F5F9",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#E2E8F0",
   },
   cameraBadge: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primary || "#6366F1",
     width: 22,
     height: 22,
     borderRadius: 11,
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
     borderWidth: 2,
     borderColor: "#FFFFFF",
   },
   infoWrapper: {
     flex: 1,
-    gap: 4,
   },
   userName: {
     fontSize: 17,
     fontWeight: "700",
     color: Colors.text || "#0F172A",
+    marginBottom: 2,
   },
   badgeChip: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#EEF2FF",
     alignSelf: "flex-start",
-    backgroundColor: "#F3E8FF",
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 12,
+    marginVertical: 4,
     gap: 4,
-    marginVertical: 2,
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: "700",
-    color: Colors.primary,
+    color: Colors.primary || "#6366F1",
+    fontWeight: "600",
   },
   detailRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginTop: 3,
     gap: 6,
   },
   detailText: {
-    fontSize: 12.5,
+    fontSize: 13,
     color: Colors.textSecondary || "#64748B",
-    fontWeight: "500",
   },
   addActionRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginTop: 3,
     gap: 6,
   },
   addText: {
-    fontSize: 12.5,
-    color: Colors.primary,
-    fontWeight: "600",
+    fontSize: 13,
+    color: Colors.primary || "#6366F1",
+    fontWeight: "500",
   },
   actionWrapper: {
     paddingLeft: 8,

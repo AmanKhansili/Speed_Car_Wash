@@ -8,10 +8,10 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { ClerkProvider, ClerkLoaded } from "@clerk/expo";
+import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
-import useUser, { UserProvider } from "@/context/userContext";
+import /*useUser,*/ { UserProvider } from "@/context/userContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export const unstable_settings = {
@@ -29,7 +29,7 @@ if (!publishableKey) {
 // Internal Navigation Component jo UserContext ko consume karega
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { userData } = useUser();
+  // const { userData } = useUser();
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
@@ -43,15 +43,26 @@ function RootLayoutNav() {
   );
 }
 
+// Naya wrapper — Clerk se userId nikaal ke UserProvider ko pass karega
+function UserProviderWithClerk({ children }: { children: React.ReactNode }) {
+  const { userId, getToken } = useAuth();
+
+   return (
+    <UserProvider userId={userId} getToken={getToken}>
+      {children}
+    </UserProvider>
+  );
+}
+
 // Main Root Layout Provider Wrapper
 export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <ClerkLoaded>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <UserProvider>
+          <UserProviderWithClerk>
             <RootLayoutNav />
-          </UserProvider>
+          </UserProviderWithClerk>
         </GestureHandlerRootView>
       </ClerkLoaded>
     </ClerkProvider>

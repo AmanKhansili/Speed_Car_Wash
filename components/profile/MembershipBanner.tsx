@@ -5,11 +5,13 @@ import Colors from "@/constants/colors";
 
 interface MembershipBannerProps {
   memberSince?: string;
+  tier?: string;
   onPressBanner?: () => void;
 }
 
 export default function MembershipBanner({
-  memberSince = "May 2024",
+  memberSince = "New Member",
+  tier = "Premium Member",
   onPressBanner,
 }: MembershipBannerProps) {
   return (
@@ -22,10 +24,13 @@ export default function MembershipBanner({
       <View style={styles.contentWrapper}>
         <View style={styles.titleRow}>
           <Ionicons name="ribbon" size={18} color="#FFD700" />
-          <Text style={styles.titleText}>Premium Member</Text>
+          <Text style={styles.titleText}>{tier}</Text>
         </View>
 
-        <Text style={styles.sinceText}>Member since {memberSince}</Text>
+        <Text style={styles.sinceText}>
+          {memberSince.startsWith("Member since") ? memberSince : `Member since ${memberSince}`}
+        </Text>
+        
         <Text style={styles.subtitleText}>
           Enjoy priority booking and exclusive benefits.
         </Text>
@@ -47,7 +52,7 @@ export default function MembershipBanner({
 
 const styles = StyleSheet.create({
   bannerContainer: {
-    backgroundColor:Colors.primary, // Deep rich purple
+    backgroundColor: Colors.primary || "#4F46E5",
     borderRadius: 18,
     padding: 16,
     flexDirection: "row",
@@ -55,10 +60,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 16,
     overflow: "hidden",
-    shadowColor: Colors.text,
+    shadowColor: Colors.text || "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
     elevation: 4,
   },
   contentWrapper: {
@@ -86,7 +91,7 @@ const styles = StyleSheet.create({
   },
   subtitleText: {
     fontSize: 11,
-    color: "white",
+    color: "rgba(255, 255, 255, 0.9)",
     fontWeight: "500",
     lineHeight: 15,
   },
