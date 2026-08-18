@@ -197,7 +197,7 @@ export default function AuthGate() {
                 <View style={styles.brandContainer}>
                   <View style={styles.iconWrapper}>
                     <Image
-                                  source={require("@/assets/images/icon.png")}
+                                  source={require("@/assets/logo/logo.png")}
                                   style={{ width: 80, height: 80 }}
                                   resizeMode="contain"
                                 />
