@@ -1,4 +1,10 @@
-import React, { useState, useCallback } from "react";
+import React, {
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+} from "react";
 import {
   View,
   Text,
@@ -9,11 +15,15 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
-import { useUser, useClerk } from "@clerk/expo";
-import { supabase } from "@/utils/supabase";
+import { useUser, useClerk, useAuth } from "@clerk/expo";
+import { createClerkSupabaseClient } from "@/utils/supabase";
 
 import Colors from "@/constants/colors";
 import UserInfoCard from "@/components/profile/userInfoCard";
@@ -24,6 +34,14 @@ import MyVehiclesSection, {
   Vehicle,
 } from "@/components/profile/MyVehiclesSection";
 import AuthGate from "@/components/auth/AuthGate";
+
+import {
+  getCachedProfileData,
+  saveProfileCache,
+  getCachedStatsData,
+  saveStatsCache,
+  clearLocalUserData,
+} from "@/utils/userStorage";
 
 interface SupabaseProfile {
   phone: string | null;
@@ -41,6 +59,17 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useClerk();
   const { user, isLoaded: isClerkLoaded, isSignedIn } = useUser();
+  const { getToken } = useAuth();
+
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  const db = useMemo(
+    () => createClerkSupabaseClient(() => getTokenRef.current()),
+    [],
+  );
 
   // Local States
   const [supabaseProfile, setSupabaseProfile] =
@@ -54,102 +83,158 @@ export default function ProfileScreen() {
   });
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isPhoneModalVisible, setIsPhoneModalVisible] = useState(false);
+
+  // Edit Profile Modal States
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [firstNameInput, setFirstNameInput] = useState("");
+  const [lastNameInput, setLastNameInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
-  const [isSavingPhone, setIsSavingPhone] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  const fetchUserData = useCallback(async () => {
-    if (!user) return;
+  const fetchUserData = useCallback(
+    async (forceRefresh = false) => {
+      if (!user) return;
 
-    try {
-      setIsLoading(true);
+      try {
+        // 1. Instant Local Cache Fetch (Zero Delay)
+        const cachedProfile = await getCachedProfileData();
+        const cachedStats = await getCachedStatsData();
 
-      // 1. Profile Data
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("phone, created_at")
-        .eq("clerk_user_id", user.id)
-        .maybeSingle();
+        if (cachedProfile) {
+          setSupabaseProfile(cachedProfile);
+        }
 
-      if (profileData) {
-        setSupabaseProfile(profileData);
+        if (cachedStats) {
+          setStats(cachedStats);
+        }
+
+        // Agar Cache nahi hai, tabhi full-screen loading spinner dikhao
+        if (!cachedProfile || !cachedStats) {
+          setIsLoading(true);
+        } else {
+          // Cache milne par immediate spinner off kar do
+          setIsLoading(false);
+        }
+
+        // 2. Fetch Vehicles (Background / Non-blocking)
+        const { data: vehicleData } = await db
+          .from("vehicles")
+          .select("id, make, model, vehicle_type, registration_number")
+          .eq("clerk_user_id", user.id);
+
+        if (vehicleData) {
+          const formattedVehicles: Vehicle[] = vehicleData.map((v) => ({
+            id: v.id,
+            name: `${v.make || ""} ${v.model || ""}`.trim() || "My Car",
+            type: v.vehicle_type || "Car",
+            number: v.registration_number || "N/A",
+          }));
+          setVehicles(formattedVehicles);
+        }
+
+        // 3. Agar local cache available hai aur forceRefresh false hai, toh DB re-fetch skip karke exit karo
+        if (cachedProfile && cachedStats && !forceRefresh) {
+          return;
+        }
+
+        // 4. Stale-While-Revalidate / Fallback DB Queries
+        const { data: profileData } = await db
+          .from("profiles")
+          .select("phone, created_at")
+          .eq("clerk_user_id", user.id)
+          .maybeSingle();
+
+        if (profileData) {
+          const formattedProfile = {
+            phone: profileData.phone,
+            created_at: profileData.created_at,
+          };
+          setSupabaseProfile(formattedProfile);
+          await saveProfileCache(formattedProfile);
+        }
+
+        const { count: totalCount } = await db
+          .from("bookings")
+          .select("*", { count: "exact", head: true })
+          .eq("clerk_user_id", user.id);
+
+        const { count: completedCount } = await db
+          .from("bookings")
+          .select("*", { count: "exact", head: true })
+          .eq("clerk_user_id", user.id)
+          .eq("status", "Completed");
+
+        const { count: upcomingCount } = await db
+          .from("bookings")
+          .select("*", { count: "exact", head: true })
+          .eq("clerk_user_id", user.id)
+          .in("status", ["Confirmed", "Pending"]);
+
+        const { count: savedCount } = await db
+          .from("saved_services")
+          .select("*", { count: "exact", head: true })
+          .eq("clerk_user_id", user.id);
+
+        const freshStats: UserStats = {
+          totalBookings: totalCount || 0,
+          completed: completedCount || 0,
+          upcoming: upcomingCount || 0,
+          savedServices: savedCount || 0,
+        };
+
+        setStats(freshStats);
+        await saveStatsCache(freshStats);
+      } catch (error) {
+        console.error("Error fetching user profile data:", error);
+      } finally {
+        setIsLoading(false);
       }
+    },
+    [user, db],
+  );
 
-      // 2. Vehicles
-      const { data: vehicleData } = await supabase
-        .from("vehicles")
-        .select("id, make, model, vehicle_type, registration_number, image_url")
-        .eq("user_id", user.id);
-
-      if (vehicleData) {
-        const formattedVehicles: Vehicle[] = vehicleData.map((v) => ({
-          id: v.id,
-          name: `${v.make || ""} ${v.model || ""}`.trim() || "My Car",
-          type: v.vehicle_type || "Car",
-          number: v.registration_number || "N/A",
-          image: v.image_url,
-        }));
-        setVehicles(formattedVehicles);
-      }
-
-      // 3. Booking Stats (Using clerk_user_id to maintain database consistency)
-      const { count: totalCount } = await supabase
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("clerk_user_id", user.id);
-
-      const { count: completedCount } = await supabase
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("clerk_user_id", user.id)
-        .eq("status", "completed");
-
-      const { count: upcomingCount } = await supabase
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("clerk_user_id", user.id)
-        .in("status", ["upcoming", "pending", "confirmed"]);
-
-      const { count: savedCount } = await supabase
-        .from("saved_services")
-        .select("*", { count: "exact", head: true })
-        .eq("clerk_user_id", user.id);
-
-      setStats({
-        totalBookings: totalCount || 0,
-        completed: completedCount || 0,
-        upcoming: upcomingCount || 0,
-        savedServices: savedCount || 0,
-      });
-    } catch (error) {
-      console.error("Error fetching user profile data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]);
-
-  // Refresh profile details every time screen comes into focus
   useFocusEffect(
     useCallback(() => {
       if (isClerkLoaded && user) {
         fetchUserData();
       } else if (isClerkLoaded && !user) {
-        // Not signed in — nothing to fetch, stop the loading state
         setIsLoading(false);
       }
     }, [isClerkLoaded, user, fetchUserData]),
   );
 
-  const handleSavePhone = async () => {
-    if (!user || !phoneInput.trim()) return;
+  // Modal Kholne Ke Liye Helper Function
+  const handleOpenEditModal = () => {
+    setFirstNameInput(user?.firstName || "");
+    setLastNameInput(user?.lastName || "");
+    setPhoneInput(supabaseProfile?.phone || "");
+    setIsEditModalVisible(true);
+  };
+
+  // Profile Save Handling (Clerk + Supabase Sync + Local Cache Update)
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    if (!firstNameInput.trim()) {
+      Alert.alert("Validation Error", "Please enter your first name.");
+      return;
+    }
 
     try {
-      setIsSavingPhone(true);
+      setIsSavingProfile(true);
 
-      const { error } = await supabase.from("profiles").upsert(
+      // 1. Clerk update (First Name and Last Name)
+      await user.update({
+        firstName: firstNameInput.trim(),
+        lastName: lastNameInput.trim(),
+      });
+
+      // 2. Supabase update (Phone Number)
+      const formattedPhone = phoneInput.trim();
+      const { error } = await db.from("profiles").upsert(
         {
           clerk_user_id: user.id,
-          phone: phoneInput.trim(),
+          phone: formattedPhone,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "clerk_user_id" },
@@ -157,18 +242,21 @@ export default function ProfileScreen() {
 
       if (error) throw error;
 
-      setSupabaseProfile((prev) => ({
-        created_at: prev?.created_at || new Date().toISOString(),
-        phone: phoneInput.trim(),
-      }));
+      const updatedProfile: SupabaseProfile = {
+        created_at: supabaseProfile?.created_at || new Date().toISOString(),
+        phone: formattedPhone,
+      };
 
-      setIsPhoneModalVisible(false);
-      setPhoneInput("");
-      Alert.alert("Success", "Phone number saved successfully!");
+      // 3. Update local state and local AsyncStorage cache immediately
+      setSupabaseProfile(updatedProfile);
+      await saveProfileCache(updatedProfile);
+
+      setIsEditModalVisible(false);
+      Alert.alert("Success", "Profile updated successfully!");
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Could not save phone number.");
+      Alert.alert("Error", err.message || "Could not save profile details.");
     } finally {
-      setIsSavingPhone(false);
+      setIsSavingProfile(false);
     }
   };
 
@@ -187,6 +275,7 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             router.replace("/" as any);
+            await clearLocalUserData();
             await signOut();
           } catch (error) {
             console.error("Logout Error:", error);
@@ -196,7 +285,6 @@ export default function ProfileScreen() {
     ]);
   };
 
-  // 1️⃣ Clerk still figuring out auth state — show spinner
   if (!isClerkLoaded) {
     return (
       <View style={[styles.container, styles.loadingCenter]}>
@@ -205,12 +293,10 @@ export default function ProfileScreen() {
     );
   }
 
-  // 2️⃣ Not signed in — show AuthGate (this now actually gets reached)
   if (!isSignedIn) {
     return <AuthGate />;
   }
 
-  // 3️⃣ Signed in, but Supabase data still loading — show spinner
   if (isLoading) {
     return (
       <View style={[styles.container, styles.loadingCenter]}>
@@ -219,10 +305,8 @@ export default function ProfileScreen() {
     );
   }
 
-  // 4️⃣ Signed in + data ready — show the actual profile
   return (
     <View style={styles.container}>
-      {/* Header Bar */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Profile</Text>
         <TouchableOpacity
@@ -244,10 +328,14 @@ export default function ProfileScreen() {
       >
         <UserInfoCard
           phone={supabaseProfile?.phone}
-          onEditPress={() => router.push("/edit-profile" as any)}
-          onChangeAvatar={() => console.log("Open Avatar Picker")}
-          onAddPhone={() => setIsPhoneModalVisible(true)}
-          onAddEmail={() => console.log("Handled via Clerk")}
+          onEditPress={handleOpenEditModal}
+          onAddPhone={handleOpenEditModal}
+          onAddEmail={() =>
+            Alert.alert(
+              "Email Address",
+              "Email is managed securely via account settings.",
+            )
+          }
         />
 
         <MembershipBanner
@@ -257,8 +345,8 @@ export default function ProfileScreen() {
 
         <MyVehiclesSection
           vehicles={vehicles}
-          onAddCarPress={() => router.push("/add-vehicle" as any)}
-          onCarPress={(car) => router.push(`/vehicle-details/${car.id}` as any)}
+          onAddCarPress={() => router.push("/booking/step1-selection" as any)}
+          onCarPress={() => router.push(`/booking/step1-selection` as any)}
         />
 
         <ProfileStats
@@ -275,47 +363,82 @@ export default function ProfileScreen() {
         <ProfileMenuList onLogoutPress={handleLogout} />
       </ScrollView>
 
-      {/* Phone Number Modal */}
-      <Modal visible={isPhoneModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Phone Number</Text>
+      {/* Profile Edit Modal */}
+      <Modal
+        visible={isEditModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardContainer}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => {
+              Keyboard.dismiss();
+              setIsEditModalVisible(false);
+            }}
+          >
+            <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Edit Profile</Text>
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="+91 9876543210"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="phone-pad"
-              value={phoneInput}
-              onChangeText={setPhoneInput}
-              autoFocus
-            />
+                <Text style={styles.inputLabel}>First Name</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="First Name"
+                  placeholderTextColor="#9CA3AF"
+                  value={firstNameInput}
+                  onChangeText={setFirstNameInput}
+                />
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => {
-                  setIsPhoneModalVisible(false);
-                  setPhoneInput("");
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
+                <Text style={styles.inputLabel}>Last Name</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Last Name"
+                  placeholderTextColor="#9CA3AF"
+                  value={lastNameInput}
+                  onChangeText={setLastNameInput}
+                />
 
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleSavePhone}
-                disabled={isSavingPhone}
-              >
-                {isSavingPhone ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+                <Text style={styles.inputLabel}>Mobile Number</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="+91 9876543210"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="phone-pad"
+                  value={phoneInput}
+                  onChangeText={setPhoneInput}
+                />
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.modalCancelBtn}
+                    onPress={() => setIsEditModalVisible(false)}
+                    disabled={isSavingProfile}
+                  >
+                    <Text style={styles.modalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.modalSaveBtn}
+                    onPress={handleSaveProfile}
+                    disabled={isSavingProfile}
+                  >
+                    {isSavingProfile ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <Text style={styles.modalSaveText}>Save</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -324,7 +447,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background || "#F8FAFC",
+    backgroundColor: "#F8FAFC",
   },
   loadingCenter: {
     justifyContent: "center",
@@ -335,82 +458,89 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    height: 56,
-    backgroundColor: Colors.surface || "#FFFFFF",
+    paddingTop: 50,
+    paddingBottom: 16,
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border || "#F1F5F9",
+    borderBottomColor: "#F1F5F9",
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
     color: Colors.text || "#0F172A",
   },
   settingsBtn: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 18,
+    padding: 6,
   },
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
   },
-
-  /* Modal Styles */
+  keyboardContainer: {
+    flex: 1,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === "ios" ? 36 : 24,
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "700",
-    color: "#111827",
-    marginBottom: 14,
+    color: Colors.text || "#0F172A",
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B",
+    marginBottom: 6,
+    marginTop: 10,
   },
   modalInput: {
-    borderWidth: 1.5,
-    borderColor: Colors.border || "#E5E7EB",
-    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: "#111827",
-    marginBottom: 16,
+    color: Colors.text || "#0F172A",
   },
   modalActions: {
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
+    marginTop: 24,
   },
   modalCancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: Colors.border || "#E5E7EB",
   },
   modalCancelText: {
+    fontSize: 15,
     fontWeight: "600",
-    color: "#6B7280",
+    color: "#64748B",
   },
   modalSaveBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
     backgroundColor: Colors.primary || "#2563EB",
+    alignItems: "center",
   },
   modalSaveText: {
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "600",
     color: "#FFFFFF",
   },
 });

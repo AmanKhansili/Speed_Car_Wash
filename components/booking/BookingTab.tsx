@@ -30,12 +30,12 @@ export interface Booking {
 
 export default function BookingTabs() {
   const router = useRouter();
-  const { userId, getToken } = useAuth(); // getToken bhi nikala
+  const { userId, getToken } = useAuth();
 
   // Clerk-aware Supabase client — RLS ke liye zaroori
   const clerkSupabase = useMemo(
     () => createClerkSupabaseClient(getToken),
-    [getToken],
+    [getToken]
   );
 
   const { userData } = useUser() as any;
@@ -57,7 +57,6 @@ export default function BookingTabs() {
   });
 
   useEffect(() => {
-    console.log("🔍 [Bookings] useEffect fired, userId:", userId);
     if (userId) {
       fetchSupabaseBookings();
     } else {
@@ -68,8 +67,6 @@ export default function BookingTabs() {
   const fetchSupabaseBookings = async () => {
     try {
       setLoading(true);
-      console.log("🔍 [Bookings] Fetching for userId:", userId);
-
       const { data, error } = await clerkSupabase
         .from("bookings")
         .select("*")
@@ -77,12 +74,10 @@ export default function BookingTabs() {
         .order("created_at", { ascending: false });
 
       console.log("🔍 [Bookings] error:", error);
-      console.log("🔍 [Bookings] data count:", data?.length, data);
 
       if (error) throw error;
 
       if (data) {
-        // Naye schema ke hisaab se map kar rahe hain: har row ek alag service/booking hai
         const formattedBookings: Booking[] = data.map((item: any) => {
           const isCancelledOrFailed =
             item.status === "Cancelled" || item.status === "Failed";
@@ -103,13 +98,12 @@ export default function BookingTabs() {
           };
         });
 
-        console.log("🔍 [Bookings] formatted:", formattedBookings);
         setBookings(formattedBookings);
       }
     } catch (error) {
       console.log(
         "❌ [Bookings] Failed to fetch bookings from Supabase",
-        error,
+        error
       );
     } finally {
       setLoading(false);
@@ -150,7 +144,7 @@ export default function BookingTabs() {
             }
           },
         },
-      ],
+      ]
     );
   };
 
@@ -222,6 +216,7 @@ export default function BookingTabs() {
 
   return (
     <View style={styles.container}>
+      {/* Header Tabs */}
       <View style={styles.tabHeader}>
         <TouchableOpacity
           style={[
@@ -260,6 +255,7 @@ export default function BookingTabs() {
         </TouchableOpacity>
       </View>
 
+      {/* New Booking Button */}
       {activeTab === "upcoming" && (
         <TouchableOpacity
           style={styles.addBookingBtn}
@@ -271,6 +267,7 @@ export default function BookingTabs() {
         </TouchableOpacity>
       )}
 
+      {/* Booking List Container */}
       {loading ? (
         <View style={styles.emptyBox}>
           <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
@@ -280,8 +277,9 @@ export default function BookingTabs() {
           data={filteredBookings}
           keyExtractor={(item) => item.id}
           renderItem={renderBookingCard}
-          scrollEnabled={false}
+          scrollEnabled={true}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContainer}
         />
       ) : (
         <View style={styles.emptyBox}>
@@ -314,6 +312,9 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 4,
+  },
+  listContainer: {
+    paddingBottom: 240,
   },
   tabText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
   activeTabText: { color: Colors.primary || "#2563EB" },

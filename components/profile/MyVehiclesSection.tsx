@@ -129,6 +129,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionHeader: {
+    paddingHorizontal:10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

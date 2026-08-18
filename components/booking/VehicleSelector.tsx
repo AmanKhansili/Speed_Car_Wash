@@ -35,7 +35,7 @@ export default function VehicleSelector({
   onSelectVehicle,
 }: VehicleSelectorProps) {
   const { userId, isSignedIn } = useAuth();
-  const { userData, addVehicle } = useUser();
+  const { userData, addVehicle, deleteVehicle } = useUser();
   const vehicles = userData?.vehicles || [];
 
   // Modal & Search States
@@ -43,6 +43,7 @@ export default function VehicleSelector({
   const [searchQuery, setSearchQuery] = useState("");
   const [isManualEntry, setIsManualEntry] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Selected or Manual Form State
   const [brandName, setBrandName] = useState("");
@@ -112,6 +113,35 @@ export default function VehicleSelector({
     }
   };
 
+  // Delete Vehicle Handler
+  const handleDeleteVehicle = (id: string, label: string) => {
+    Alert.alert(
+      "Remove Vehicle",
+      `Do you want to remove "${label}" ?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingId(id);
+            try {
+              await deleteVehicle(id);
+              if (selectedVehicleId === id) {
+                onSelectVehicle("");
+              }
+            } catch (error: any) {
+              console.error("Error deleting vehicle:", error);
+              Alert.alert("Error", error.message || "Vehicle remove nahi ho payi. Try again.");
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -148,6 +178,7 @@ export default function VehicleSelector({
             const isSelected = item.id === selectedVehicleId;
             const regNum = item.registrationNumber || item.registration_number || "NOT SPECIFIED";
             const carCategory = item.category || item.vehicle_type || "Car";
+            const isDeleting = deletingId === item.id;
 
             return (
               <TouchableOpacity
@@ -155,6 +186,7 @@ export default function VehicleSelector({
                 style={[styles.vehicleCard, isSelected && styles.selectedVehicleCard]}
                 onPress={() => onSelectVehicle(item.id)}
                 activeOpacity={0.8}
+                disabled={isDeleting}
               >
                 <View style={styles.cardHeader}>
                   <Ionicons
@@ -173,6 +205,21 @@ export default function VehicleSelector({
                   >
                     {isSelected && <View style={styles.radioInner} />}
                   </View>
+
+                  <TouchableOpacity
+                    style={styles.deleteVehicleBtn}
+                    onPress={() =>
+                      handleDeleteVehicle(item.id, `${item.brand || ""} ${item.model || item.name}`.trim())
+                    }
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <ActivityIndicator size="small" color="#EF4444" />
+                    ) : (
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    )}
+                  </TouchableOpacity>
                 </View>
 
                 {regNum !== "NOT SPECIFIED" && (
@@ -424,6 +471,10 @@ const styles = StyleSheet.create({
   },
   radioCircleSelected: { borderColor: Colors.primary || "#2563EB" },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary || "#2563EB" },
+  deleteVehicleBtn: {
+    marginLeft: 10,
+    padding: 4,
+  },
   regBadge: {
     alignSelf: "flex-start",
     marginTop: 8,

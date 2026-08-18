@@ -8,6 +8,7 @@ import {
   saveVehicleLocally,
   setSelectedVehicleLocally,
   addVehicleWithSync,
+  overwriteVehiclesLocally,
 } from "@/utils/userStorage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
@@ -76,29 +77,28 @@ export const UserProvider = ({
 
       if (error) throw error;
 
-      if (dbVehicles && dbVehicles.length > 0) {
-        const formattedVehicles: Vehicle[] = dbVehicles.map((item) => ({
-          id: item.id,
-          brand: item.make || item.brand || "Vehicle",
-          model: item.model || "",
-          category: item.vehicle_type || item.category || "Car",
-          registrationNumber: item.registration_number || "",
-        }));
+      const formattedVehicles: Vehicle[] = (dbVehicles || []).map((item) => ({
+        id: item.id,
+        brand: item.make || item.brand || "Vehicle",
+        model: item.model || "",
+        category: item.vehicle_type || item.category || "Car",
+        registrationNumber: item.registration_number || "",
+      }));
 
-        const currentLocal = await getLocalUserData();
-        const updatedLocalData: LocalUserData = {
-          ...currentLocal,
-          vehicles: formattedVehicles,
-          selectedVehicleId:
-            currentLocal.selectedVehicleId || formattedVehicles[0].id,
-          lastUpdated: Date.now(),
-        };
+      const currentLocal = await getLocalUserData();
+      const stillHasSelected = formattedVehicles.some(
+        (v) => v.id === currentLocal.selectedVehicleId,
+      );
+      const newSelectedId = stillHasSelected
+        ? currentLocal.selectedVehicleId
+        : formattedVehicles[0]?.id || null;
 
-        if (updatedLocalData.location) {
-          await saveLocationLocally(updatedLocalData.location);
-        }
-        setUserData(updatedLocalData);
-      }
+      // AsyncStorage ko hamesha DB ke latest data se overwrite karo — chahe list empty ho jaaye
+      const updatedLocalData = await overwriteVehiclesLocally(
+        formattedVehicles,
+        newSelectedId,
+      );
+      setUserData((prev) => ({ ...prev, ...updatedLocalData }));
     } catch (error) {
       console.warn(
         "[UserContext] DB Sync failed, using cached storage:",
@@ -173,19 +173,31 @@ export const UserProvider = ({
   };
 
   const deleteVehicle = async (id: string) => {
-    if (removeVehicleLocally) {
-      const updated = await removeVehicleLocally(id);
-      setUserData((prev) => ({ ...prev, ...updated }));
-      await syncWithDB();
-    } else {
-      const updatedVehicles = userData.vehicles.filter((v) => v.id !== id);
-      setUserData((prev) => ({
-        ...prev,
-        vehicles: updatedVehicles,
-        selectedVehicleId:
-          prev.selectedVehicleId === id ? null : prev.selectedVehicleId,
-      }));
+    if (!userId) {
+      throw new Error(
+        "deleteVehicle: userId is missing, maybe user is not logged in",
+      );
     }
+    if (!clerkSupabase) {
+      throw new Error(
+        "deleteVehicle: clerkSupabase client is ready (getToken missing?)",
+      );
+    }
+
+    const { error } = await clerkSupabase
+      .from("vehicles")
+      .delete()
+      .eq("id", id)
+      .eq("clerk_user_id", userId);
+
+    if (error) {
+      console.error("[UserContext] Supabase delete failed:", error);
+      throw error;
+    }
+
+    // Local AsyncStorage se bhi properly hatao (authenticated client, remote sync dobara nahi — pehle hi delete ho chuka)
+    const updated = await removeVehicleLocally(id, false);
+    setUserData((prev) => ({ ...prev, ...updated }));
   };
 
   const selectVehicle = async (id: string) => {

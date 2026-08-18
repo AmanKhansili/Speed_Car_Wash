@@ -123,7 +123,7 @@ export default function Step2DateTimeScreen() {
                   setSelectedAddressId(id);
                   setAddressText(fullAddressString);
                 }}
-                onAddNewAddress={() => console.log("Add New Address Modal")}
+                // onAddNewAddress={() => console.log("Add New Address Modal")}
               />
             ) : (
               <View style={styles.walkinCard}>

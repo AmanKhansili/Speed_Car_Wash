@@ -123,7 +123,7 @@ export default function BookingSummaryScreen() {
           amount: grandTotal * 100,
           currency: "INR",
           order_id: order.id,
-          name: "Car Wash App",
+          name: "Speed Car Wash",
           description: "Premium Car Wash & Detailing",
           prefill: {
             name: "Customer Name",
@@ -169,7 +169,7 @@ export default function BookingSummaryScreen() {
               error?.reason ||
               "Payment could not be completed";
             Alert.alert("Payment Failed", `Reason: ${errorMsg}`);
-            console.log("Razorpay Error:", JSON.stringify(error));
+            // console.log("Razorpay Error:", JSON.stringify(error));
           },
           onClose: () => {
             setIsSubmitting(false);
