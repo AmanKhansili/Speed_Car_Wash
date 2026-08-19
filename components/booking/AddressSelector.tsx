@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useState, useMemo, useEffect } from "react";
+import Colors from "@/constants/colors";
+import { Address, AddressSelectorProps } from "@/types/service";
+import { createClerkSupabaseClient } from "@/utils/supabase";
+import { useAuth } from "@clerk/expo";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,14 +17,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import * as Location from "expo-location";
-import Colors from "@/constants/colors";
-import { Address, AddressSelectorProps } from "@/types/service";
-import { useAuth } from "@clerk/expo";
-import { createClerkSupabaseClient } from "@/utils/supabase";
-
-export const SAVED_ADDRESSES: Address[] = [];
 
 export default function AddressSelector({
   selectedAddressId,
@@ -26,11 +24,7 @@ export default function AddressSelector({
 }: AddressSelectorProps) {
   const { userId: clerkUserId, getToken } = useAuth();
 
-  // Same pattern as Step4SummaryScreen — memoized so it doesn't rebuild every render
-  const supabase = useMemo(
-    () => createClerkSupabaseClient(getToken),
-    [getToken],
-  );
+  const supabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isFetching, setIsFetching] = useState(true);
@@ -39,12 +33,12 @@ export default function AddressSelector({
   const [isSaving, setIsSaving] = useState(false);
 
   const [tag, setTag] = useState<"Home" | "Work" | "Other">("Home");
-  const [address, setaddress] = useState("");
+  const [address, setAddress] = useState("");
   const [landmark, setLandmark] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
 
-  // 0. Fetch saved addresses for this user on mount
+  // Fetch saved addresses & auto-select first or matching
   useEffect(() => {
     const fetchAddresses = async () => {
       if (!clerkUserId) {
@@ -62,7 +56,14 @@ export default function AddressSelector({
           console.error("Fetch Addresses Error:", error);
           return;
         }
-        setAddresses((data as Address[]) ?? []);
+
+        const addressList = (data as Address[]) ?? [];
+        setAddresses(addressList);
+
+        // Auto select first address if none is selected
+        if (!selectedAddressId && addressList.length > 0) {
+          onSelectAddress(addressList[0].id, addressList[0].address_line_1);
+        }
       } finally {
         setIsFetching(false);
       }
@@ -71,7 +72,6 @@ export default function AddressSelector({
     fetchAddresses();
   }, [clerkUserId]);
 
-  // 1. Fetch Current Location (GPS)
   const handleUseCurrentLocation = async () => {
     try {
       setIsLocating(true);
@@ -98,22 +98,18 @@ export default function AddressSelector({
         const item = geocode[0];
         const line1 = [item.formattedAddress].filter(Boolean).join(", ");
 
-        setaddress(line1 || "Current Location");
+        setAddress(line1 || "Current Location");
         setLatitude(lat);
         setLongitude(lng);
         setIsModalVisible(true);
       }
     } catch (error) {
-      Alert.alert(
-        "Location Error",
-        "Could not fetch current location. Please fill manually.",
-      );
+      Alert.alert("Location Error", "Could not fetch current location. Please fill manually.");
     } finally {
       setIsLocating(false);
     }
   };
 
-  // 2. Save New Address — persists to Supabase (real UUID, matches FK on bookings.address_id)
   const handleSaveAddress = async () => {
     if (!address.trim()) {
       Alert.alert("Missing Details", "Please fill Address.");
@@ -150,8 +146,7 @@ export default function AddressSelector({
       setAddresses((prev) => [savedAddress, ...prev]);
       onSelectAddress(savedAddress.id, savedAddress.address_line_1);
 
-      // Reset & Close Modal
-      setaddress("");
+      setAddress("");
       setLandmark("");
       setTag("Home");
       setLatitude(null);
@@ -175,10 +170,9 @@ export default function AddressSelector({
 
   return (
     <View style={styles.container}>
-      {/* Header Actions */}
       <View style={styles.sectionHeader}>
         <View style={styles.titleRow}>
-          <Ionicons name="location-sharp" size={20} color={Colors.primary} />
+          <Ionicons name="location-sharp" size={20} color={Colors.primary || "#2563EB"} />
           <Text style={styles.sectionTitle}>Select Pickup Address</Text>
         </View>
 
@@ -187,12 +181,11 @@ export default function AddressSelector({
           activeOpacity={0.7}
           onPress={() => setIsModalVisible(true)}
         >
-          <Ionicons name="add" size={16} color={Colors.primary} />
+          <Ionicons name="add" size={16} color={Colors.primary || "#2563EB"} />
           <Text style={styles.addBtnText}>Add New</Text>
         </TouchableOpacity>
       </View>
 
-      {/* GPS Fetch Button */}
       <TouchableOpacity
         style={styles.currentLocBtn}
         activeOpacity={0.8}
@@ -200,24 +193,19 @@ export default function AddressSelector({
         disabled={isLocating}
       >
         {isLocating ? (
-          <ActivityIndicator size="small" color={Colors.primary} />
+          <ActivityIndicator size="small" color={Colors.primary || "#2563EB"} />
         ) : (
           <>
-            <MaterialIcons
-              name="my-location"
-              size={18}
-              color={Colors.primary}
-            />
+            <MaterialIcons name="my-location" size={18} color={Colors.primary || "#2563EB"} />
             <Text style={styles.currentLocText}>Use Current Location</Text>
           </>
         )}
       </TouchableOpacity>
 
-      {/* Address Cards List */}
       {isFetching ? (
         <ActivityIndicator
           size="small"
-          color={Colors.primary}
+          color={Colors.primary || "#2563EB"}
           style={{ marginTop: 12 }}
         />
       ) : (
@@ -229,10 +217,7 @@ export default function AddressSelector({
               <TouchableOpacity
                 key={item.id}
                 activeOpacity={0.85}
-                style={[
-                  styles.addressCard,
-                  isSelected && styles.selectedAddressCard,
-                ]}
+                style={[styles.addressCard, isSelected && styles.selectedAddressCard]}
                 onPress={() => onSelectAddress(item.id, item.address_line_1)}
               >
                 <View style={styles.cardHeader}>
@@ -240,25 +225,16 @@ export default function AddressSelector({
                     <Ionicons
                       name={getTagIcon(item.tag)}
                       size={14}
-                      color={isSelected ? Colors.primary : Colors.textSecondary}
+                      color={
+                        isSelected ? Colors.primary || "#2563EB" : Colors.textSecondary || "#6B7280"
+                      }
                     />
-                    <Text
-                      style={[
-                        styles.tagText,
-                        isSelected && styles.selectedTagText,
-                      ]}
-                    >
+                    <Text style={[styles.tagText, isSelected && styles.selectedTagText]}>
                       {item.tag}
                     </Text>
                   </View>
 
-                  {/* Radio Circle */}
-                  <View
-                    style={[
-                      styles.radioOuter,
-                      isSelected && styles.radioOuterSelected,
-                    ]}
-                  >
+                  <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
                     {isSelected && <View style={styles.radioInner} />}
                   </View>
                 </View>
@@ -270,7 +246,7 @@ export default function AddressSelector({
                     <Ionicons
                       name="navigate-outline"
                       size={12}
-                      color={Colors.textSecondary}
+                      color={Colors.textSecondary || "#6B7280"}
                     />
                     <Text style={styles.landmarkText}>{item.landmark}</Text>
                   </View>
@@ -280,63 +256,52 @@ export default function AddressSelector({
           })}
 
           {addresses.length === 0 && (
-            <Text style={styles.landmarkText}>
+            <Text style={styles.emptyAddressText}>
               No saved addresses yet — tap &ldquo;Add New&rdquo; to add one.
             </Text>
           )}
         </View>
       )}
 
-      {/* ADD ADDRESS MODAL FORM */}
+      {/* MODAL */}
       <Modal visible={isModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Address Details</Text>
               <TouchableOpacity onPress={() => setIsModalVisible(false)}>
-                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                <Ionicons name="close" size={24} color={Colors.textSecondary || "#6B7280"} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Tag Selection */}
               <Text style={styles.inputLabel}>Save Address As</Text>
               <View style={styles.tagContainer}>
                 {(["Home", "Work", "Other"] as const).map((type) => (
                   <TouchableOpacity
                     key={type}
-                    style={[
-                      styles.tagChip,
-                      tag === type && styles.selectedTagChip,
-                    ]}
+                    style={[styles.tagChip, tag === type && styles.selectedTagChip]}
                     onPress={() => setTag(type)}
                   >
-                    <Text
-                      style={[
-                        styles.tagChipText,
-                        tag === type && styles.selectedTagChipText,
-                      ]}
-                    >
+                    <Text style={[styles.tagChipText, tag === type && styles.selectedTagChipText]}>
                       {type}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* Address - Textarea (multiline) */}
               <Text style={styles.inputLabel}>Address*</Text>
               <TextInput
                 style={styles.textArea}
                 placeholder="House/Flat No, Building, Street, Area"
                 placeholderTextColor="#9CA3AF"
                 value={address}
-                onChangeText={setaddress}
+                onChangeText={setAddress}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
               />
 
-              {/* Landmark - Simple single-line input */}
               <Text style={styles.inputLabel}>Landmark (Optional)</Text>
               <TextInput
                 style={styles.input}
@@ -387,11 +352,9 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: Colors.primary,
+    color: Colors.primary || "#2563EB",
     marginLeft: 2,
   },
-
-  /* Current Location Button */
   currentLocBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -404,19 +367,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 14,
   },
-  currentLocText: { fontSize: 14, fontWeight: "700", color: Colors.primary },
-
-  /* Address Card Styles */
+  currentLocText: { fontSize: 14, fontWeight: "700", color: Colors.primary || "#2563EB" },
   addressList: { gap: 10 },
   addressCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surface || "#FFFFFF",
     borderRadius: 14,
     padding: 14,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: Colors.border || "#E5E7EB",
   },
   selectedAddressCard: {
-    borderColor: Colors.primary,
+    borderColor: Colors.primary || "#2563EB",
     backgroundColor: "#F0F5FF",
   },
   cardHeader: {
@@ -434,26 +395,25 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 4,
   },
-  tagText: { fontSize: 12, fontWeight: "700", color: Colors.textSecondary },
-  selectedTagText: { color: Colors.primary },
+  tagText: { fontSize: 12, fontWeight: "700", color: Colors.textSecondary || "#6B7280" },
+  selectedTagText: { color: Colors.primary || "#2563EB" },
   radioOuter: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: Colors.border || "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
   },
-  radioOuterSelected: { borderColor: Colors.primary },
+  radioOuterSelected: { borderColor: Colors.primary || "#2563EB" },
   radioInner: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primary || "#2563EB",
   },
-  address: { fontSize: 14, fontWeight: "700", color: "#111827" },
-  addressLine1: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2 },
+  addressLine1: { fontSize: 13, color: Colors.text || "#111827", marginTop: 2, fontWeight: "500" },
   landmarkWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -462,11 +422,15 @@ const styles = StyleSheet.create({
   },
   landmarkText: {
     fontSize: 11.5,
-    color: Colors.textSecondary,
+    color: Colors.textSecondary || "#6B7280",
     fontStyle: "italic",
   },
-
-  /* Modal Form Styles */
+  emptyAddressText: {
+    fontSize: 13,
+    color: Colors.textSecondary || "#6B7280",
+    fontStyle: "italic",
+    paddingVertical: 8,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -493,22 +457,18 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 6,
   },
-
-  /* Simple single-line input (Landmark) */
   input: {
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: Colors.border || "#E5E7EB",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
     color: "#111827",
   },
-
-  /* Multiline textarea (Address Line 1) */
   textArea: {
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: Colors.border || "#E5E7EB",
     borderRadius: 10,
     height: 100,
     paddingHorizontal: 12,
@@ -516,21 +476,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#111827",
   },
-
   tagContainer: { flexDirection: "row", gap: 10, marginBottom: 6 },
   tagChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: Colors.border || "#E5E7EB",
     backgroundColor: "#F9FAFB",
   },
-  selectedTagChip: { borderColor: Colors.primary, backgroundColor: "#EFF6FF" },
-  tagChipText: { fontSize: 13, fontWeight: "600", color: Colors.textSecondary },
-  selectedTagChipText: { color: Colors.primary },
+  selectedTagChip: { borderColor: Colors.primary || "#2563EB", backgroundColor: "#EFF6FF" },
+  tagChipText: { fontSize: 13, fontWeight: "600", color: Colors.textSecondary || "#6B7280" },
+  selectedTagChipText: { color: Colors.primary || "#2563EB" },
   saveBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primary || "#2563EB",
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
