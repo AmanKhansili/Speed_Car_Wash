@@ -1,7 +1,7 @@
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
   ScrollView,
@@ -20,11 +20,11 @@ import HeroBanner from "@/components/home/HeroBanner";
 import MembershipBanner from "@/components/home/MembershipBanner";
 import QuickActions from "@/components/home/QuickActions";
 import { useBookingStore } from "@/store/bookingStore";
+import { createClerkSupabaseClient } from "@/utils/supabase";
+import { useAuth, useUser } from "@clerk/expo";
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
-import { useUser } from "@clerk/expo";
+import { useFocusEffect, useRouter } from "expo-router";
 
-// 🚀 Dynamic Popular Services Data
 const POPULAR_SERVICES = [
   {
     id: "pop_1",
@@ -68,16 +68,67 @@ const POPULAR_SERVICES = [
   },
 ];
 
+const DEFAULT_FALLBACK_REVIEWS = [
+  {
+    id: "fallback_1",
+    name: "Aman",
+    rating: 5,
+    review: "Excellent service. My car looks brand new. Highly recommended!",
+  },
+  {
+    id: "fallback_2",
+    name: "Amit",
+    rating: 4,
+    review: "Very professional detailers. They arrived exactly on time.",
+  },
+];
+
+interface DisplayReview {
+  id: string;
+  name: string;
+  rating: number;
+  review: string;
+}
+
 export default function HomeScreen() {
   const [address, setAddress] = useState("Fetching location...");
+  const [reviewsList, setReviewsList] = useState<DisplayReview[]>(DEFAULT_FALLBACK_REVIEWS);
   const router = useRouter();
 
-  // 🔧 FIX: useUser() was imported but never called — `user` was undefined,
-  // which crashed the greeting text below with a ReferenceError.
   const { user } = useUser();
-
-  // 🚀 Zustand se addService function nikala
+  const { getToken } = useAuth();
   const { addService } = useBookingStore();
+
+  const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
+
+  // Fetch Live Reviews from Supabase
+  const fetchLiveReviews = useCallback(async () => {
+    try {
+      const { data, error } = await clerkSupabase
+        .from("reviews")
+        .select("id, rating, comment, clerk_user_id, service_name, created_at")
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (!error && data && data.length > 0) {
+        const mappedReviews: DisplayReview[] = data.map((item: any) => ({
+          id: item.id,
+          name: item.service_name ? `${item.service_name} User` : "Verified Customer",
+          rating: item.rating || 5,
+          review: item.comment || "Great detailing service and prompt doorstep support!",
+        }));
+        setReviewsList(mappedReviews);
+      }
+    } catch (err) {
+      console.log("Reviews Fetch Notice:", err);
+    }
+  }, [clerkSupabase]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchLiveReviews();
+    }, [fetchLiveReviews]),
+  );
 
   useEffect(() => {
     (async () => {
@@ -111,10 +162,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* HEADER */}
         <View style={styles.header}>
           <View>
@@ -128,11 +176,10 @@ export default function HomeScreen() {
           <View style={styles.locationContainer}>
             <View>
               <Text style={styles.locationLabel}>
-                <Ionicons name="location" size={11} color="#EF4444" />
-                Current Location
+                <Ionicons name="location" size={11} color="#EF4444" /> Current Location
               </Text>
               <Text style={styles.locationText}>
-                {address}
+                {address}{" "}
                 <Ionicons
                   name="chevron-down"
                   size={12}
@@ -144,59 +191,45 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity style={styles.notificationBtn}>
-            <Ionicons
-              name="notifications-outline"
-              size={22}
-              color={Colors.text}
-            />
+            <Ionicons name="notifications-outline" size={22} color={Colors.text} />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
         </View>
 
         {/* GREETING */}
         <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>
-            Hello, {user?.firstName || "Guest"} 👋
-          </Text>
-          <Text style={styles.greetingSub}>
-            Keep your car clean, Keep your ride fresh
-          </Text>
+          <Text style={styles.greetingTitle}>Hello, {user?.firstName || "Guest"} 👋</Text>
+          <Text style={styles.greetingSub}>Keep your car clean, Keep your ride fresh</Text>
         </View>
 
         <HeroBanner />
         <QuickActions />
 
         {/* POPULAR SERVICES */}
-        <SectionTitle
-          title="Popular Services"
-          onPress={() => router.push("/services")}
-        />
+        <SectionTitle title="Popular Services" onPress={() => router.push("/services")} />
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.horizontalScroll}
         >
-          {/* 🚀 Dynamic Map Logic for Popular Services */}
           {POPULAR_SERVICES.map((item) => (
             <ServiceCard
               key={item.id}
               title={item.title}
               subtitle={item.subtitle}
-              price={`₹${item.price}`} // String format for UI
+              price={`₹${item.price}`}
               rating={item.rating}
               reviews={item.reviews}
               tag={item.tag}
               image={item.image}
               style={{ marginRight: 16 }}
               onAddPress={() => {
-                // 1. Service ko cart/store mein add karo
                 addService({
                   id: item.id,
                   title: item.title,
                   price: item.price,
                 });
-                // 2. Direct Booking page par bhej do
                 router.push("/booking/step1-selection" as any);
               }}
             />
@@ -207,26 +240,16 @@ export default function HomeScreen() {
         <MembershipBanner />
 
         {/* CUSTOMER REVIEWS */}
-        <SectionTitle
-          title="Customer Reviews"
-          onPress={() => router.push("/services")}
-        />
+        <SectionTitle title="Customer Reviews" onPress={() => router.push("/services")} />
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.horizontalScroll}
         >
-          <ReviewCard
-            name="Aman"
-            rating={5}
-            review="Excellent service. My car looks brand new. Highly recommended!"
-          />
-          <ReviewCard
-            name="Amit"
-            rating={4}
-            review="Very professional detailers. They arrived exactly on time."
-          />
+          {reviewsList.map((item) => (
+            <ReviewCard key={item.id} name={item.name} rating={item.rating} review={item.review} />
+          ))}
         </ScrollView>
       </ScrollView>
     </SafeAreaView>
