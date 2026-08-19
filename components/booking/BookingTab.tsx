@@ -4,7 +4,7 @@ import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -38,7 +38,12 @@ export default function BookingTabs() {
   const { user } = useUser();
   const { userId, getToken } = useAuth();
 
-  const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  const clerkSupabase = useMemo(() => createClerkSupabaseClient(() => getTokenRef.current()), []);
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [loading, setLoading] = useState(true);
@@ -145,7 +150,6 @@ export default function BookingTabs() {
     ]);
   };
 
-  // Review Submit Handler (Direct Authentic Name fetch from 'profiles')
   const handleSubmitReview = async (rating: number, comment: string) => {
     if (!ratingTarget || !userId) return;
 
@@ -157,7 +161,10 @@ export default function BookingTabs() {
         .maybeSingle();
 
       const authenticName =
-        profileData?.name?.trim() || user?.fullName || user?.firstName || "Verified Customer";
+        profileData?.name?.trim() ||
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+        "Verified Customer";
 
       const { error } = await clerkSupabase.from("reviews").insert({
         booking_id: ratingTarget.id,
@@ -171,9 +178,13 @@ export default function BookingTabs() {
 
       if (error) throw error;
 
-      Alert.alert("Thank You!", "Your verified review has been posted.");
+      Alert.alert(
+        "Review Submitted! ⭐",
+        "Thank you for your feedback! It helps us keep your ride looking its best.",
+      );
     } catch (err: any) {
-      Alert.alert("Feedback Received", `Thank you for rating ${rating} ⭐!`);
+      console.error("Review Submit Error:", err);
+      Alert.alert("Submission Failed", "Could not save your review right now. Please try again.");
     }
   };
 
@@ -234,7 +245,6 @@ export default function BookingTabs() {
         </View>
       </View>
 
-      {/* Action Buttons */}
       <View style={styles.cardActions}>
         <TouchableOpacity
           style={styles.invoiceBtn}
@@ -271,7 +281,6 @@ export default function BookingTabs() {
 
   return (
     <View style={styles.container}>
-      {/* Header Tabs */}
       <View style={styles.tabHeader}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
@@ -294,7 +303,6 @@ export default function BookingTabs() {
         </TouchableOpacity>
       </View>
 
-      {/* New Booking Button */}
       {activeTab === "upcoming" && (
         <TouchableOpacity
           style={styles.addBookingBtn}
@@ -306,7 +314,6 @@ export default function BookingTabs() {
         </TouchableOpacity>
       )}
 
-      {/* List Container */}
       {loading ? (
         <View style={styles.emptyBox}>
           <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
@@ -327,7 +334,7 @@ export default function BookingTabs() {
         </View>
       )}
 
-      {/* Digital Receipt Modal (Pure React Native JS) */}
+      {/* Digital Receipt Modal */}
       <Modal
         visible={!!selectedInvoice}
         animationType="slide"
