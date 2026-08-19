@@ -102,27 +102,27 @@ export default function HomeScreen() {
   const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
   // Fetch Live Reviews from Supabase
-  const fetchLiveReviews = useCallback(async () => {
-    try {
-      const { data, error } = await clerkSupabase
-        .from("reviews")
-        .select("id, rating, comment, clerk_user_id, service_name, created_at")
-        .order("created_at", { ascending: false })
-        .limit(6);
+const fetchLiveReviews = useCallback(async () => {
+  try {
+    const { data, error } = await clerkSupabase
+      .from("reviews")
+      .select("id, rating, comment, user_name, service_name, created_at")
+      .order("created_at", { ascending: false })
+      .limit(6);
 
-      if (!error && data && data.length > 0) {
-        const mappedReviews: DisplayReview[] = data.map((item: any) => ({
-          id: item.id,
-          name: item.service_name ? `${item.service_name} User` : "Verified Customer",
-          rating: item.rating || 5,
-          review: item.comment || "Great detailing service and prompt doorstep support!",
-        }));
-        setReviewsList(mappedReviews);
-      }
-    } catch (err) {
-      console.log("Reviews Fetch Notice:", err);
+    if (!error && data && data.length > 0) {
+      const mappedReviews: DisplayReview[] = data.map((item: any) => ({
+        id: item.id,
+        name: item.user_name || "Verified Customer",
+        rating: item.rating || 5,
+        review: item.comment || "Great detailing service and prompt doorstep support!",
+      }));
+      setReviewsList(mappedReviews);
     }
-  }, [clerkSupabase]);
+  } catch (err) {
+    console.log("Reviews Fetch Notice:", err);
+  }
+}, [clerkSupabase]);
 
   useFocusEffect(
     useCallback(() => {

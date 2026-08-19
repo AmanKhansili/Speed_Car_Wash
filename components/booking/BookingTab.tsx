@@ -1,7 +1,7 @@
 import RatingModal from "@/components/booking/RatingModal";
 import Colors from "@/constants/colors";
 import { createClerkSupabaseClient } from "@/utils/supabase";
-import { useAuth } from "@clerk/expo";
+import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -35,6 +35,7 @@ export interface BookingDisplayItem {
 
 export default function BookingTabs() {
   const router = useRouter();
+  const { user } = useUser();
   const { userId, getToken } = useAuth();
 
   const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
@@ -144,14 +145,24 @@ export default function BookingTabs() {
     ]);
   };
 
-  // Review Submit Handler
+  // Review Submit Handler (Direct Authentic Name fetch from 'profiles')
   const handleSubmitReview = async (rating: number, comment: string) => {
     if (!ratingTarget || !userId) return;
 
     try {
+      const { data: profileData } = await clerkSupabase
+        .from("profiles")
+        .select("name")
+        .eq("clerk_user_id", userId)
+        .maybeSingle();
+
+      const authenticName =
+        profileData?.name?.trim() || user?.fullName || user?.firstName || "Verified Customer";
+
       const { error } = await clerkSupabase.from("reviews").insert({
         booking_id: ratingTarget.id,
         clerk_user_id: userId,
+        user_name: authenticName,
         rating: rating,
         comment: comment || null,
         service_name: ratingTarget.title,
@@ -160,7 +171,7 @@ export default function BookingTabs() {
 
       if (error) throw error;
 
-      Alert.alert("Thank You!", "Your rating has been submitted successfully.");
+      Alert.alert("Thank You!", "Your verified review has been posted.");
     } catch (err: any) {
       Alert.alert("Feedback Received", `Thank you for rating ${rating} ⭐!`);
     }
@@ -234,7 +245,6 @@ export default function BookingTabs() {
           <Text style={styles.invoiceBtnText}>View Receipt</Text>
         </TouchableOpacity>
 
-        {/* Past Bookings ke liye Rate Button */}
         {item.type === "past" && item.status.toLowerCase() !== "cancelled" && (
           <TouchableOpacity
             style={[styles.invoiceBtn, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}
@@ -246,7 +256,6 @@ export default function BookingTabs() {
           </TouchableOpacity>
         )}
 
-        {/* Upcoming Bookings ke liye Cancel Button */}
         {item.type === "upcoming" && item.status.toLowerCase() !== "cancelled" && (
           <TouchableOpacity
             style={styles.cancelBtn}
@@ -318,7 +327,7 @@ export default function BookingTabs() {
         </View>
       )}
 
-      {/* Digital Receipt Modal */}
+      {/* Digital Receipt Modal (Pure React Native JS) */}
       <Modal
         visible={!!selectedInvoice}
         animationType="slide"
