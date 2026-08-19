@@ -4,6 +4,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SupabaseClient } from "@supabase/supabase-js";
 
 const USER_DATA_KEY = "@app_user_local_data";
+const PROFILE_CACHE_KEY = "@app_profile_cache";
+const STATS_CACHE_KEY = "@app_stats_cache";
+
+export interface CachedProfileData {
+  phone: string | null;
+  created_at: string;
+}
+
+export interface CachedUserStats {
+  totalBookings: number;
+  completed: number;
+  upcoming: number;
+  savedServices: number;
+}
 
 const DEFAULT_USER_DATA: LocalUserData = {
   mobileNumber: "",
@@ -13,17 +27,10 @@ const DEFAULT_USER_DATA: LocalUserData = {
   lastUpdated: Date.now(),
 };
 
-/**
- * Get complete local user data safely with fallback
- */
 export const getLocalUserData = async (): Promise<LocalUserData> => {
   try {
     const jsonValue = await AsyncStorage.getItem(USER_DATA_KEY);
-
-    if (!jsonValue) {
-      return DEFAULT_USER_DATA;
-    }
-
+    if (!jsonValue) return DEFAULT_USER_DATA;
     const parsed = JSON.parse(jsonValue);
     return {
       ...DEFAULT_USER_DATA,
@@ -36,9 +43,6 @@ export const getLocalUserData = async (): Promise<LocalUserData> => {
   }
 };
 
-/**
- * Internal helper to persist data to AsyncStorage safely
- */
 const saveLocalUserData = async (data: LocalUserData): Promise<LocalUserData> => {
   try {
     await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(data));
@@ -49,44 +53,19 @@ const saveLocalUserData = async (data: LocalUserData): Promise<LocalUserData> =>
   }
 };
 
-/**
- * Update mobile number locally
- */
 export const savePhoneLocally = async (mobileNumber: string): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
-
-  const updatedData: LocalUserData = {
-    ...currentData,
-    mobileNumber,
-    lastUpdated: Date.now(),
-  };
-
-  return saveLocalUserData(updatedData);
+  return saveLocalUserData({ ...currentData, mobileNumber, lastUpdated: Date.now() });
 };
 
-/**
- * Update location locally
- */
 export const saveLocationLocally = async (location: UserLocation): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
-
-  const updatedData: LocalUserData = {
-    ...currentData,
-    location,
-    lastUpdated: Date.now(),
-  };
-
-  return saveLocalUserData(updatedData);
+  return saveLocalUserData({ ...currentData, location, lastUpdated: Date.now() });
 };
 
-/**
- * Save or update an existing vehicle locally
- */
 export const saveVehicleLocally = async (vehicle: Vehicle): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
-
   const existingIndex = currentData.vehicles.findIndex((v) => v.id === vehicle.id);
-
   const updatedVehicles = [...currentData.vehicles];
 
   if (existingIndex >= 0) {
@@ -95,31 +74,21 @@ export const saveVehicleLocally = async (vehicle: Vehicle): Promise<LocalUserDat
     updatedVehicles.unshift(vehicle);
   }
 
-  const updatedData: LocalUserData = {
+  return saveLocalUserData({
     ...currentData,
     vehicles: updatedVehicles,
     selectedVehicleId: vehicle.id,
     lastUpdated: Date.now(),
-  };
-
-  return saveLocalUserData(updatedData);
+  });
 };
 
-/**
- * ADD NEW VEHICLE:
- * Inserts into Supabase (make, model, registration_number, vehicle_type)
- * Maps returned row to Frontend Vehicle (brand, model, registrationNumber, category)
- */
 export const addVehicleWithSync = async (
   vehicle: NewVehicle,
   clerkUserId: string,
   client: SupabaseClient,
 ): Promise<{ vehicle: Vehicle; userData: LocalUserData }> => {
-  if (!clerkUserId) {
-    throw new Error("User is not authenticated. Please log in.");
-  }
+  if (!clerkUserId) throw new Error("User is not authenticated. Please log in.");
 
-  // Database snake_case payload
   const dbPayload = {
     clerk_user_id: clerkUserId,
     make: vehicle.brand,
@@ -139,7 +108,6 @@ export const addVehicleWithSync = async (
     throw new Error(error?.message || "Could not save vehicle to remote database.");
   }
 
-  // Clean mapping to frontend model
   const fullVehicle: Vehicle = {
     id: insertedRow.id,
     brand: insertedRow.make || vehicle.brand,
@@ -150,16 +118,9 @@ export const addVehicleWithSync = async (
   };
 
   const updatedUserData = await saveVehicleLocally(fullVehicle);
-
-  return {
-    vehicle: fullVehicle,
-    userData: updatedUserData,
-  };
+  return { vehicle: fullVehicle, userData: updatedUserData };
 };
 
-/**
- * Remove vehicle locally and from Supabase
- */
 export const removeVehicleLocally = async (
   vehicleId: string,
   syncWithSupabase: boolean = true,
@@ -174,56 +135,79 @@ export const removeVehicleLocally = async (
   }
 
   const currentData = await getLocalUserData();
-
   const updatedVehicles = currentData.vehicles.filter((vehicle) => vehicle.id !== vehicleId);
-
   const isSelected = currentData.selectedVehicleId === vehicleId;
-
   const newSelectedId = isSelected
     ? updatedVehicles.length > 0
       ? updatedVehicles[0].id
       : null
     : currentData.selectedVehicleId;
 
-  const updatedData: LocalUserData = {
+  return saveLocalUserData({
     ...currentData,
     vehicles: updatedVehicles,
     selectedVehicleId: newSelectedId,
     lastUpdated: Date.now(),
-  };
-
-  return saveLocalUserData(updatedData);
+  });
 };
 
-/**
- * Change selected vehicle locally
- */
 export const setSelectedVehicleLocally = async (vehicleId: string): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
-
   const vehicleExists = currentData.vehicles.some((vehicle) => vehicle.id === vehicleId);
 
   if (!vehicleExists) {
-    console.warn(`[UserStorage] Cannot select vehicle ${vehicleId}: vehicle not found locally.`);
     return currentData;
   }
 
-  const updatedData: LocalUserData = {
+  return saveLocalUserData({
     ...currentData,
     selectedVehicleId: vehicleId,
     lastUpdated: Date.now(),
-  };
-
-  return saveLocalUserData(updatedData);
+  });
 };
 
-/**
- * Clear local data on logout
- */
 export const clearLocalUserData = async (): Promise<void> => {
   try {
-    await AsyncStorage.removeItem(USER_DATA_KEY);
+    await AsyncStorage.multiRemove([USER_DATA_KEY, PROFILE_CACHE_KEY, STATS_CACHE_KEY]);
   } catch (error) {
     console.error("[UserStorage] Error clearing local user data:", error);
+  }
+};
+
+/* ====================================================================
+ * PROFILE & STATS CACHING HELPERS
+ * ==================================================================== */
+
+export const getCachedProfileData = async (): Promise<CachedProfileData | null> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+    return jsonValue ? JSON.parse(jsonValue) : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+export const saveProfileCache = async (profile: CachedProfileData): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+  } catch (error) {
+    console.error("[UserStorage] Error saving profile cache:", error);
+  }
+};
+
+export const getCachedStatsData = async (): Promise<CachedUserStats | null> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(STATS_CACHE_KEY);
+    return jsonValue ? JSON.parse(jsonValue) : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+export const saveStatsCache = async (stats: CachedUserStats): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(STATS_CACHE_KEY, JSON.stringify(stats));
+  } catch (error) {
+    console.error("[UserStorage] Error saving stats cache:", error);
   }
 };

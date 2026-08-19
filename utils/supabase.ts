@@ -10,8 +10,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Plain client — Clerk token NAHI bhejta. Sirf un tables ke liye use karo
-// jinpe RLS nahi hai ya public policy hai (e.g. profiles).
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false,
@@ -19,8 +17,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Clerk-aware client — HAR request pe Clerk session token attach karta hai,
-// taaki auth.jwt()->>'sub' wali RLS policies kaam karein.
 export function createClerkSupabaseClient(
   getToken: () => Promise<string | null>
 ): SupabaseClient {

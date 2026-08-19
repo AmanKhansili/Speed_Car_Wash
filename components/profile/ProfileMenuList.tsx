@@ -40,22 +40,22 @@ const PRIMARY_ITEMS: MenuItem[] = [
     route: "/payments",
     bgColor: "#EEF2FF",
   },
-  {
-    id: "vehicles",
-    title: "My Vehicles",
-    subtitle: "Manage your cars",
-    icon: "car-outline",
-    route: "/vehicles",
-    bgColor: "#EEF2FF",
-  },
-  {
-    id: "saved_services",
-    title: "Saved Services",
-    subtitle: "Your favorite services",
-    icon: "heart-outline",
-    route: "/saved-services",
-    bgColor: "#EEF2FF",
-  },
+  // {
+  //   id: "vehicles",
+  //   title: "My Vehicles",
+  //   subtitle: "Manage your cars",
+  //   icon: "car-outline",
+  //   route: "/vehicles",
+  //   bgColor: "#EEF2FF",
+  // },
+  // {
+  //   id: "saved_services",
+  //   title: "Saved Services",
+  //   subtitle: "Your favorite services",
+  //   icon: "heart-outline",
+  //   route: "/saved-services",
+  //   bgColor: "#EEF2FF",
+  // },
   {
     id: "referral",
     title: "Refer & Earn",
@@ -72,7 +72,7 @@ const SECONDARY_ITEMS: MenuItem[] = [
     title: "Help & Support",
     subtitle: "FAQs, Chat & more",
     icon: "headset-outline",
-    route: "/support",
+    route: "/HelpSupport",
     iconColor: "#64748B",
     bgColor: "#F1F5F9",
   },
@@ -99,18 +99,15 @@ export default function ProfileMenuList({
   const router = useRouter();
 
   const handlePress = (item: MenuItem) => {
-    // 1. If custom onItemPress prop provided by parent
     if (onItemPress) {
       onItemPress(item.id);
     }
 
-    // 2. Handle Logout specifically
     if (item.id === "logout") {
       if (onLogoutPress) onLogoutPress();
       return;
     }
 
-    // 3. Fallback to default Expo Router navigation if route is defined
     if (item.route) {
       router.push(item.route as any);
     }
@@ -207,13 +204,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface || "#FFFFFF",
     borderRadius: 18,
     paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: Colors.border || "#F1F5F9",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
   },
   menuItem: {
     flexDirection: "row",

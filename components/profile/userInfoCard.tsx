@@ -20,7 +20,7 @@ interface UserInfoCardProps {
 }
 
 export default function UserInfoCard({
-  isPremium = true,
+  isPremium = false,
   phone,
   onEditPress,
   onChangeAvatar,
@@ -33,7 +33,6 @@ export default function UserInfoCard({
     return null;
   }
 
-  // Dynamic user details from Clerk with clean fallbacks
   const name =
     user?.fullName ||
     `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
@@ -53,7 +52,6 @@ export default function UserInfoCard({
       style={styles.cardContainer}
       onPress={onEditPress}
     >
-      {/* Left: Avatar with Camera Badge */}
       <View style={styles.avatarWrapper}>
         <Image source={{ uri: avatarUrl }} style={styles.avatar} />
         <TouchableOpacity
@@ -65,14 +63,12 @@ export default function UserInfoCard({
         </TouchableOpacity>
       </View>
 
-      {/* Middle: User Details */}
       <View style={styles.infoWrapper}>
         {/* Name */}
         <Text style={styles.userName} numberOfLines={1}>
           {name}
         </Text>
 
-        {/* Member Badge */}
         {isPremium && (
           <View style={styles.badgeChip}>
             <Ionicons name="star-outline" size={12} color={Colors.primary || "#6366F1"} />
@@ -80,20 +76,24 @@ export default function UserInfoCard({
           </View>
         )}
 
-        {/* Phone / Add Phone Option */}
+        {/* Phone Row: Pressable whether number exists or needs to be added */}
         {phone ? (
-          <View style={styles.detailRow}>
+          <TouchableOpacity
+            style={styles.detailRow}
+            onPress={onAddPhone || onEditPress}
+            activeOpacity={0.7}
+          >
             <Ionicons
               name="call-outline"
               size={13}
               color={Colors.textSecondary || "#64748B"}
             />
             <Text style={styles.detailText}>{phone}</Text>
-          </View>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={styles.addActionRow}
-            onPress={onAddPhone}
+            onPress={onAddPhone || onEditPress}
             activeOpacity={0.7}
           >
             <Ionicons
@@ -105,7 +105,6 @@ export default function UserInfoCard({
           </TouchableOpacity>
         )}
 
-        {/* Email / Add Email Option */}
         {email ? (
           <View style={styles.detailRow}>
             <Ionicons
@@ -133,7 +132,6 @@ export default function UserInfoCard({
         )}
       </View>
 
-      {/* Right: Chevron Arrow */}
       <View style={styles.actionWrapper}>
         <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
       </View>
@@ -149,11 +147,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
   avatarWrapper: {
     position: "relative",

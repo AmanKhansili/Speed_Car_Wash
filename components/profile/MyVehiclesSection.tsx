@@ -153,6 +153,7 @@ export default function MyVehiclesSection({
 const styles = StyleSheet.create({
   container: { marginBottom: 16 },
   sectionHeader: {
+    paddingHorizontal:10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

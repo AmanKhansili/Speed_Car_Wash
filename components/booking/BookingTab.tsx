@@ -47,7 +47,6 @@ export default function BookingTabs() {
   const fetchSupabaseBookings = async () => {
     try {
       setLoading(true);
-
       const { data, error } = await clerkSupabase
         .from("bookings")
         .select("*")
@@ -198,6 +197,7 @@ export default function BookingTabs() {
 
   return (
     <View style={styles.container}>
+      {/* Header Tabs */}
       <View style={styles.tabHeader}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
@@ -220,6 +220,7 @@ export default function BookingTabs() {
         </TouchableOpacity>
       </View>
 
+      {/* New Booking Button */}
       {activeTab === "upcoming" && (
         <TouchableOpacity
           style={styles.addBookingBtn}
@@ -231,6 +232,7 @@ export default function BookingTabs() {
         </TouchableOpacity>
       )}
 
+      {/* Booking List Container */}
       {loading ? (
         <View style={styles.emptyBox}>
           <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
@@ -240,8 +242,9 @@ export default function BookingTabs() {
           data={filteredBookings}
           keyExtractor={(item) => item.id}
           renderItem={renderBookingCard}
+          scrollEnabled={true}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={styles.listContainer}
         />
       ) : (
         <View style={styles.emptyBox}>
@@ -274,6 +277,9 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 4,
+  },
+  listContainer: {
+    paddingBottom: 240,
   },
   tabText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
   activeTabText: { color: Colors.primary || "#2563EB" },

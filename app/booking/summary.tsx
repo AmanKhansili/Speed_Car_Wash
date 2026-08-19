@@ -59,8 +59,7 @@ export default function BookingSummaryScreen() {
 
   // Selected Car Metadata resolution
   const selectedCar =
-    userData?.vehicles?.find((v) => v.id === params.vehicleId) ||
-    userData?.vehicles?.[0];
+    userData?.vehicles?.find((v) => v.id === params.vehicleId) || userData?.vehicles?.[0];
 
   const carDetails = selectedCar
     ? {
@@ -182,7 +181,7 @@ export default function BookingSummaryScreen() {
           amount: grandTotal * 100,
           currency: "INR",
           order_id: order.id,
-          name: "Car Wash App",
+          name: "Speed Car Wash",
           description: "Premium Car Wash & Detailing",
           prefill: {
             name: "Customer Name",

@@ -37,12 +37,12 @@ export default function ProfileStats({
       count: upcoming,
       icon: "time-outline" as const,
     },
-    {
-      id: "saved",
-      label: "Saved Services",
-      count: savedServices,
-      icon: "heart-outline" as const,
-    },
+    // {
+    //   id: "saved",
+    //   label: "Saved Services",
+    //   count: savedServices,
+    //   icon: "heart-outline" as const,
+    // },
   ];
 
   return (
