@@ -18,13 +18,13 @@ import ServiceCard from "@/components/cards/ServiceCard";
 import SectionTitle from "@/components/common/SectionTitle";
 import HeroBanner from "@/components/home/HeroBanner";
 import MembershipBanner from "@/components/home/MembershipBanner";
+import ServicesGrid from "@/components/home/ServicesGrid";
 import QuickActions from "@/components/home/QuickActions";
 import { useBookingStore } from "@/store/bookingStore";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/expo";
 
-// 🚀 Dynamic Popular Services Data
 const POPULAR_SERVICES = [
   {
     id: "pop_1",
@@ -72,11 +72,8 @@ export default function HomeScreen() {
   const [address, setAddress] = useState("Fetching location...");
   const router = useRouter();
 
-  // 🔧 FIX: useUser() was imported but never called — `user` was undefined,
-  // which crashed the greeting text below with a ReferenceError.
-  const { user } = useUser();
 
-  // 🚀 Zustand se addService function nikala
+  const { user } = useUser();
   const { addService } = useBookingStore();
 
   useEffect(() => {
@@ -164,6 +161,7 @@ export default function HomeScreen() {
         </View>
 
         <HeroBanner />
+        <ServicesGrid/>
         <QuickActions />
 
         {/* POPULAR SERVICES */}

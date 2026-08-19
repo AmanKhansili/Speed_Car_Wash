@@ -10,10 +10,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { router } from "expo-router"; // 🚀 Router import kiya
 
 const { width } = Dimensions.get("window");
 const BANNER_WIDTH = width - 32;
 
+// 🚀 Banners ke saath dynamic route/category mapping add ki
 const bannerData = [
   {
     id: "1",
@@ -21,6 +23,7 @@ const bannerData = [
     sub: "At Your Doorstep",
     color: "#0B1033",
     image: require("@/assets/images/hero-car.png"),
+    category: "Wash", // 🚀 Service Screen Category Target
   },
   {
     id: "2",
@@ -29,6 +32,7 @@ const bannerData = [
     color: "#1A1B41",
     image: require("@/assets/images/banner3.png"),
     imageStyle: { right: -50, top: 5, width: 350, height: 300 },
+    category: "Coating", // 🚀 Service Screen Category Target
   },
   {
     id: "3",
@@ -37,6 +41,7 @@ const bannerData = [
     color: "#131039",
     image: require("@/assets/images/banner2.png"),
     imageStyle: { right: -50, top: -35, width: 300, height: 270 },
+    category: "Detailing", // 🚀 Service Screen Category Target
   },
 ];
 
@@ -55,12 +60,27 @@ export default function HeroBanner() {
     return () => clearInterval(timer);
   }, [currentIndex]);
 
+  // 🚀 Banner tap par Services screen redirect handler
+  const handleBannerPress = (category: string) => {
+    router.push({
+      pathname: "/(tabs)/services", // Apne project routes ke hisab se path set karein
+      params: { category },
+    } as any);
+  };
+
   const renderItem = ({ item }: { item: (typeof bannerData)[0] }) => (
-    <View style={[styles.card, { backgroundColor: item.color }]}>
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => handleBannerPress(item.category)} // 🚀 Pure card ko clickable banaya
+      style={[styles.card, { backgroundColor: item.color }]}
+    >
       <View style={styles.content}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.sub}>{item.sub}</Text>
-        <TouchableOpacity style={styles.btn}>
+        <TouchableOpacity
+          style={styles.btn}
+          onPress={() => handleBannerPress(item.category)} // 🚀 Button tap handle
+        >
           <Text style={styles.btnText}>Book Now</Text>
         </TouchableOpacity>
       </View>
@@ -70,7 +90,7 @@ export default function HeroBanner() {
         style={[styles.bannerImage, item.imageStyle]}
         resizeMode="contain"
       />
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -88,7 +108,6 @@ export default function HeroBanner() {
           offset: width * index,
           index,
         })}
-        // 2. Agar layout render na hua ho toh crash se bachane ke liye
         onScrollToIndexFailed={(info) => {
           const wait = new Promise((resolve) => setTimeout(resolve, 500));
           wait.then(() => {

@@ -1,12 +1,12 @@
 import Colors from "@/constants/colors";
-import Radius from "@/constants/radius";
-import Shadow from "@/constants/shadow";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -20,7 +20,7 @@ import ServiceCard from "@/components/cards/ServiceCard";
 import SearchBar from "@/components/common/SearchBar";
 
 import { useBookingStore } from "@/store/bookingStore";
-import { supabase } from "@/utils/supabase"; // 🚀 Supabase instance import
+import { supabase } from "@/utils/supabase";
 import { router } from "expo-router";
 
 const { width } = Dimensions.get("window");
@@ -35,10 +35,22 @@ export default function ServicesScreen() {
   const [categoriesList, setCategoriesList] = useState<string[]>(["All"]);
   const [loading, setLoading] = useState(true);
 
+  // 🚀 Filter Modal States
+  const [isFilterModalVisible, setFilterModalVisible] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"lowToHigh" | "highToLow">("lowToHigh");
+
+  const params = useLocalSearchParams<{ category?: string }>();
+
+  // 🚀 3. Route Param ke change hone par Category Active karein
+  useEffect(() => {
+    if (params.category) {
+      setActiveCategory(params.category);
+    }
+  }, [params.category]);
+
   // 🚀 ZUSTAND STATE HOOKS
   const { selectedServices, addService, removeService, getTotalPrice } = useBookingStore();
 
-  // 🚀 Fetch Services from Supabase on Mount
   useEffect(() => {
     fetchServicesFromSupabase();
   }, []);
@@ -51,24 +63,8 @@ export default function ServicesScreen() {
       if (error) throw error;
 
       if (data) {
-        // 🚀 PRICE-WISE SERIALIZATION (Low to High sorting)
-        const sortedData = data.sort((a: any, b: any) => {
-          // Price string "₹400" ya "₹1,400" ko clean karke number banate hain comparison ke liye
-          const priceA = parseInt(
-            typeof a.price === "string" ? a.price.replace(/[^\d]/g, "") : a.price,
-            10,
-          );
-          const priceB = parseInt(
-            typeof b.price === "string" ? b.price.replace(/[^\d]/g, "") : b.price,
-            10,
-          );
-          return priceA - priceB; // Low to High (Agar High to Low chahiye toh priceB - priceA kar dena)
-        });
-
-        setServicesData(sortedData);
-
-        // Extract unique categories dynamically
-        const uniqueCategories = ["All", ...new Set(sortedData.map((item: any) => item.category))];
+        setServicesData(data);
+        const uniqueCategories = ["All", ...new Set(data.map((item: any) => item.category))];
         setCategoriesList(uniqueCategories as string[]);
       }
     } catch (error) {
@@ -78,15 +74,12 @@ export default function ServicesScreen() {
     }
   };
 
-  // Check karna ki service already selected hai ya nahi
   const isSelected = (id: string) => selectedServices.some((s) => s.id === id);
 
-  // Add / Remove Logic
   const toggleService = (item: any) => {
     if (isSelected(item.id)) {
       removeService(item.id);
     } else {
-      // "₹599" string ko actual number (599) mein convert kar rahe hain calculations ke liye
       const numericPrice =
         typeof item.price === "number"
           ? item.price
@@ -100,20 +93,28 @@ export default function ServicesScreen() {
     }
   };
 
-  // Filtering Logic
-  const filteredServices = servicesData.filter((service) => {
-    const matchesCategory = activeCategory === "All" || service.category === activeCategory;
-    const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // 🚀 Filter + Sort Logic Combined
+  const filteredAndSortedServices = servicesData
+    .filter((service) => {
+      const matchesCategory = activeCategory === "All" || service.category === activeCategory;
+      const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    })
+    .sort((a, b) => {
+      const priceA = typeof a.price === "number" ? a.price : parseInt(a.price.replace(/[^\d]/g, ""), 10);
+      const priceB = typeof b.price === "number" ? b.price : parseInt(b.price.replace(/[^\d]/g, ""), 10);
+
+      return sortOrder === "lowToHigh" ? priceA - priceB : priceB - priceA;
+    });
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
+      {/* Header with Working Filter Button */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>All Services</Text>
-        <TouchableOpacity style={styles.iconBtn}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => setFilterModalVisible(true)}>
           <Ionicons name="filter" size={20} color={Colors.text} />
         </TouchableOpacity>
       </View>
@@ -121,20 +122,14 @@ export default function ServicesScreen() {
       <SearchBar placeholder="Find a service..." onSearch={(text) => setSearchQuery(text)} />
 
       <View style={styles.categoryContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
           {categoriesList.map((cat, index) => (
             <TouchableOpacity
               key={index}
               style={[styles.categoryPill, activeCategory === cat && styles.activeCategoryPill]}
               onPress={() => setActiveCategory(cat)}
             >
-              <Text
-                style={[styles.categoryText, activeCategory === cat && styles.activeCategoryText]}
-              >
+              <Text style={[styles.categoryText, activeCategory === cat && styles.activeCategoryText]}>
                 {cat}
               </Text>
             </TouchableOpacity>
@@ -148,7 +143,7 @@ export default function ServicesScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredServices}
+          data={filteredAndSortedServices}
           keyExtractor={(item) => item.id}
           numColumns={2}
           showsVerticalScrollIndicator={false}
@@ -162,7 +157,6 @@ export default function ServicesScreen() {
                 price={typeof item.price === "number" ? `₹${item.price}` : item.price}
                 rating={item.rating || "4.8"}
                 reviews={item.reviews || "50+"}
-                // 🚀 Safe Image Handling: Agar item.image URL hai toh use karo, warna fallback image
                 image={
                   item.image && item.image.startsWith("http")
                     ? { uri: item.image }
@@ -184,7 +178,7 @@ export default function ServicesScreen() {
         />
       )}
 
-      {/* 🚀 SMART FLOATING "GO TO BOOKING" BAR */}
+      {/* Floating Bottom Bar */}
       {selectedServices.length > 0 && (
         <View style={styles.floatingBar}>
           <View>
@@ -200,77 +194,69 @@ export default function ServicesScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* 🚀 Filter Modal */}
+      <Modal visible={isFilterModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Sort & Filter</Text>
+
+            <Text style={styles.filterSectionTitle}>Sort by Price</Text>
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => setSortOrder("lowToHigh")}
+            >
+              <Text style={styles.optionText}>Price: Low to High</Text>
+              {sortOrder === "lowToHigh" && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => setSortOrder("highToLow")}
+            >
+              <Text style={styles.optionText}>Price: High to Low</Text>
+              {sortOrder === "highToLow" && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={() => setFilterModalVisible(false)}
+            >
+              <Text style={styles.closeBtnText}>Apply Filters</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 12,
-  },
-  iconBtn: { padding: 4 },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: Colors.text },
-  categoryContainer: { marginBottom: 20 },
-  categoryScroll: { paddingLeft: 16, paddingRight: 8 },
-  categoryPill: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: Radius.round,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    marginRight: 12,
-  },
-  activeCategoryPill: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  categoryText: { fontSize: 13, fontWeight: "600", color: Colors.textSecondary },
-  activeCategoryText: { color: Colors.surface },
-  listContent: { paddingHorizontal: 16, paddingBottom: 140 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: Colors.text },
+  iconBtn: { padding: 8, borderRadius: 8, backgroundColor: "#F1F5F9" },
+  categoryContainer: { marginVertical: 12 },
+  categoryScroll: { paddingHorizontal: 16, gap: 8 },
+  categoryPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: "#F1F5F9" },
+  activeCategoryPill: { backgroundColor: Colors.primary || "#2563EB" },
+  categoryText: { fontSize: 14, color: Colors.textSecondary },
+  activeCategoryText: { color: "#FFF", fontWeight: "600" },
+  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
   centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
-
-  floatingBar: {
-    position: "absolute",
-    bottom: 90,
-    left: 16,
-    right: 16,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    ...Shadow.heavy,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cartText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: Colors.textSecondary,
-    marginBottom: 2,
-  },
-  cartTotal: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: Colors.text,
-  },
-  continueBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: Radius.round,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  continueText: {
-    color: "#FFF",
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  floatingBar: { position: "absolute", bottom: 80, left: 16, right: 16, backgroundColor: Colors.primary || "#2563EB", borderRadius: 16, padding: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  cartText: { color: "#FFF", fontSize: 12, opacity: 0.9 },
+  cartTotal: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+  continueBtn: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, gap: 6 },
+  continueText: { color: "#FFF", fontWeight: "600" },
+  
+  // Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContainer: { backgroundColor: "#FFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 16 },
+  filterSectionTitle: { fontSize: 14, fontWeight: "600", color: "#64748B", marginBottom: 12 },
+  filterOption: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  optionText: { fontSize: 16, color: Colors.text },
+  closeBtn: { marginTop: 20, backgroundColor: Colors.primary || "#2563EB", paddingVertical: 14, borderRadius: 12, alignItems: "center" },
+  closeBtnText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
 });

@@ -61,7 +61,7 @@ const PRIMARY_ITEMS: MenuItem[] = [
     title: "Refer & Earn",
     subtitle: "Invite friends and earn rewards",
     icon: "gift-outline",
-    route: "/referral",
+    route: "/refer-and-earn",
     bgColor: "#EEF2FF",
   },
 ];
