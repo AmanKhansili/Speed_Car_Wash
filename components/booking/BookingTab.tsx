@@ -9,9 +9,12 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 
@@ -19,9 +22,12 @@ export interface BookingDisplayItem {
   id: string;
   title: string;
   price: string;
+  numericAmount: number;
   date: string;
   address: string;
   phone: string;
+  paymentId?: string;
+  vehicleName?: string;
   status: "Confirmed" | "Pending" | "Cancelled" | "Completed" | "Failed" | string;
   type: "upcoming" | "past";
 }
@@ -35,6 +41,7 @@ export default function BookingTabs() {
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<BookingDisplayItem[]>([]);
+  const [selectedInvoice, setSelectedInvoice] = useState<BookingDisplayItem | null>(null);
 
   useEffect(() => {
     if (userId) {
@@ -64,6 +71,7 @@ export default function BookingTabs() {
 
           const title =
             item.service_name ||
+            (item.services_booked && item.services_booked.items?.[0]?.title) ||
             (item.services_booked && item.services_booked[0]?.title) ||
             "Car Wash Service";
 
@@ -73,20 +81,29 @@ export default function BookingTabs() {
               ? new Date(item.scheduled_date).toLocaleDateString()
               : "Scheduled Soon");
 
-          const displayPrice = `₹${item.total_amount ?? item.amount ?? 0}`;
+          const rawAmount = Number(item.total_amount ?? item.amount ?? 0);
+          const displayPrice = `₹${rawAmount}`;
           const displayPhone = item.primary_phone || item.phone || "N/A";
           const displayAddress =
             item.address ||
             (item.service_type === "pickup" ? "Pickup Requested" : "Workshop Center");
 
+          const vehicleName =
+            item.services_booked?.vehicle?.name ||
+            item.vehicle_name ||
+            "Vehicle";
+
           return {
             id: item.id,
             title,
             price: displayPrice,
+            numericAmount: rawAmount,
             date: displayDate,
             address: displayAddress,
             status: item.status || "Pending",
             phone: displayPhone,
+            paymentId: item.payment_id || "Prepaid",
+            vehicleName,
             type: isPast ? "past" : "upcoming",
           };
         });
@@ -148,7 +165,7 @@ export default function BookingTabs() {
           resizeMode="cover"
         />
         <View style={styles.headerInfo}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.cardPrice}>{item.price}</Text>
         </View>
         <View
@@ -183,21 +200,31 @@ export default function BookingTabs() {
         </View>
       </View>
 
-      {item.type === "upcoming" && item.status.toLowerCase() !== "cancelled" && (
+      <View style={styles.cardActions}>
         <TouchableOpacity
-          style={styles.cancelBtn}
-          onPress={() => handleCancel(item.id)}
+          style={styles.invoiceBtn}
           activeOpacity={0.8}
+          onPress={() => setSelectedInvoice(item)}
         >
-          <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+          <Ionicons name="receipt-outline" size={15} color="#2563EB" />
+          <Text style={styles.invoiceBtnText}>View Receipt</Text>
         </TouchableOpacity>
-      )}
+
+        {item.type === "upcoming" && item.status.toLowerCase() !== "cancelled" && (
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={() => handleCancel(item.id)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      {/* Header Tabs */}
       <View style={styles.tabHeader}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
@@ -220,7 +247,6 @@ export default function BookingTabs() {
         </TouchableOpacity>
       </View>
 
-      {/* New Booking Button */}
       {activeTab === "upcoming" && (
         <TouchableOpacity
           style={styles.addBookingBtn}
@@ -232,7 +258,6 @@ export default function BookingTabs() {
         </TouchableOpacity>
       )}
 
-      {/* Booking List Container */}
       {loading ? (
         <View style={styles.emptyBox}>
           <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
@@ -252,6 +277,94 @@ export default function BookingTabs() {
           <Text style={styles.emptyText}>No {activeTab} bookings found.</Text>
         </View>
       )}
+
+      {/* Instant Digital Receipt Modal */}
+      <Modal
+        visible={!!selectedInvoice}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedInvoice(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedInvoice(null)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={styles.invoiceCard}>
+              <View style={styles.invoiceHeader}>
+                <View>
+                  <Text style={styles.invoiceCompany}>Speed Car Wash</Text>
+                  <Text style={styles.invoiceSub}>Official Tax Invoice</Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedInvoice(null)}>
+                  <Ionicons name="close-circle" size={26} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              {selectedInvoice && (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.invoiceRefBox}>
+                    <Text style={styles.invoiceRefLabel}>RECEIPT ID</Text>
+                    <Text style={styles.invoiceRefValue}>#{selectedInvoice.id.slice(0, 8).toUpperCase()}</Text>
+                  </View>
+
+                  <View style={styles.invoiceMeta}>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.metaLabel}>Date:</Text>
+                      <Text style={styles.metaValue}>{selectedInvoice.date}</Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.metaLabel}>Vehicle:</Text>
+                      <Text style={styles.metaValue}>{selectedInvoice.vehicleName}</Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.metaLabel}>Payment Ref:</Text>
+                      <Text style={styles.metaValue}>{selectedInvoice.paymentId}</Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.metaLabel}>Status:</Text>
+                      <Text style={[styles.metaValue, { color: "#16A34A", fontWeight: "700" }]}>
+                        {selectedInvoice.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.billTable}>
+                    <Text style={styles.tableHead}>ITEM BREAKDOWN</Text>
+
+                    <View style={styles.tableRow}>
+                      <Text style={styles.tableName}>{selectedInvoice.title}</Text>
+                      <Text style={styles.tablePrice}>
+                        ₹{Math.round((selectedInvoice.numericAmount || 499) / 1.18)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.tableRow}>
+                      <Text style={styles.tableName}>Integrated GST (18%)</Text>
+                      <Text style={styles.tablePrice}>
+                        ₹{(selectedInvoice.numericAmount || 499) - Math.round((selectedInvoice.numericAmount || 499) / 1.18)}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.tableRow, styles.totalRow]}>
+                      <Text style={styles.totalLabel}>Total Paid</Text>
+                      <Text style={styles.totalAmount}>₹{selectedInvoice.numericAmount || 499}</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.doneBtn}
+                    onPress={() => setSelectedInvoice(null)}
+                  >
+                    <Text style={styles.doneBtnText}>Close Receipt</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -278,9 +391,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
   },
-  listContainer: {
-    paddingBottom: 240,
-  },
+  listContainer: { paddingBottom: 240 },
   tabText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
   activeTabText: { color: Colors.primary || "#2563EB" },
   addBookingBtn: {
@@ -292,12 +403,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
-  addBookingBtnText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    marginLeft: 6,
-    fontSize: 14,
-  },
+  addBookingBtnText: { color: "#FFFFFF", fontWeight: "700", marginLeft: 6, fontSize: 14 },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
@@ -307,26 +413,11 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   cardHeader: { flexDirection: "row", alignItems: "center" },
-  cardImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
-  },
+  cardImage: { width: 50, height: 50, borderRadius: 10, backgroundColor: "#F1F5F9" },
   headerInfo: { flex: 1, marginLeft: 12 },
   cardTitle: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
-  cardPrice: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.primary || "#2563EB",
-    marginTop: 2,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: "#F1F5F9",
-  },
+  cardPrice: { fontSize: 14, fontWeight: "600", color: Colors.primary || "#2563EB", marginTop: 2 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "#F1F5F9" },
   badgeText: { fontSize: 11, fontWeight: "700", color: "#475569" },
   confirmedBadge: { backgroundColor: "#DCFCE7" },
   pendingBadge: { backgroundColor: "#FEF3C7" },
@@ -336,19 +427,69 @@ const styles = StyleSheet.create({
   cardDetails: { gap: 6 },
   detailRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   detailText: { fontSize: 13, color: "#64748B" },
-  cancelBtn: {
-    marginTop: 12,
-    paddingVertical: 8,
+  cardActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  invoiceBtn: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  invoiceBtnText: { color: Colors.primary || "#2563EB", fontSize: 13, fontWeight: "600" },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#EF4444",
   },
-  cancelBtnText: { color: "#EF4444", fontSize: 12, fontWeight: "600" },
-  emptyBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
+  cancelBtnText: { color: "#EF4444", fontSize: 13, fontWeight: "600" },
+  emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: 40 },
   emptyText: { marginTop: 8, color: "#94A3B8", fontSize: 14 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "flex-end",
+  },
+  invoiceCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 22,
+    maxHeight: "85%",
+  },
+  invoiceHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  invoiceCompany: { fontSize: 18, fontWeight: "800", color: Colors.primary || "#2563EB" },
+  invoiceSub: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  invoiceRefBox: { backgroundColor: "#F8FAFC", padding: 12, borderRadius: 10, marginBottom: 14 },
+  invoiceRefLabel: { fontSize: 10, fontWeight: "700", color: "#94A3B8" },
+  invoiceRefValue: { fontSize: 15, fontWeight: "700", color: "#0F172A", marginTop: 2 },
+  invoiceMeta: { gap: 8, marginBottom: 16 },
+  metaRow: { flexDirection: "row", justifyContent: "space-between" },
+  metaLabel: { fontSize: 13, color: "#64748B" },
+  metaValue: { fontSize: 13, color: "#0F172A", fontWeight: "600" },
+  billTable: { borderTopWidth: 1, borderTopColor: "#E2E8F0", paddingTop: 14, marginBottom: 20 },
+  tableHead: { fontSize: 11, fontWeight: "700", color: "#94A3B8", marginBottom: 8 },
+  tableRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
+  tableName: { fontSize: 13, color: "#334155" },
+  tablePrice: { fontSize: 13, fontWeight: "600", color: "#0F172A" },
+  totalRow: { borderTopWidth: 1, borderTopColor: "#E2E8F0", marginTop: 8, paddingTop: 10 },
+  totalLabel: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
+  totalAmount: { fontSize: 17, fontWeight: "800", color: Colors.primary || "#2563EB" },
+  doneBtn: {
+    backgroundColor: Colors.primary || "#2563EB",
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  doneBtnText: { color: "#FFF", fontSize: 14, fontWeight: "700" },
 });
