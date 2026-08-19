@@ -1,11 +1,19 @@
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
 import Shadow from "@/constants/shadow";
+import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo"; 
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 import VehicleSelector from "@/components/booking/VehicleSelector";
 import useUser from "@/context/userContext";
@@ -16,10 +24,24 @@ import { useBookingStore } from "../../store/bookingStore";
 export default function Step1SelectionScreen() {
   const router = useRouter();
   const { isLoaded, isSignedIn, userId } = useAuth();
-  const { selectVehicle } = useUser();
+  const { selectVehicle, userData } = useUser();
   const { selectedServices, removeService, getTotalPrice } = useBookingStore();
+  const params = useLocalSearchParams<{ prefilledVehicleId?: string }>();
 
   const [selectedVehicle, setSelectedVehicle] = useState<string>("");
+
+  // 🚀 Quick-fill / Pre-saved logic: Agar profile se car click karke aaye hain
+  useEffect(() => {
+    if (params.prefilledVehicleId) {
+      setSelectedVehicle(params.prefilledVehicleId);
+      selectVehicle(params.prefilledVehicleId);
+    } else if (userData?.vehicles?.length > 0 && !selectedVehicle) {
+      // By default pehli car select kar lo taaki user ko aaram rahe
+      const defaultCarId = userData.vehicles[0].id;
+      setSelectedVehicle(defaultCarId);
+      selectVehicle(defaultCarId);
+    }
+  }, [params.prefilledVehicleId, userData]);
 
   const handleVehicleSelect = (id: string) => {
     setSelectedVehicle(id);
@@ -55,10 +77,7 @@ export default function Step1SelectionScreen() {
     return (
       <View style={[styles.container, styles.center]}>
         <Text style={styles.errorText}>Please log in to make a booking.</Text>
-        <TouchableOpacity
-          style={styles.loginBtn}
-          onPress={() => router.replace("/" as any)}
-        >
+        <TouchableOpacity style={styles.loginBtn} onPress={() => router.replace("/" as any)}>
           <Text style={styles.loginBtnText}>Go to Login</Text>
         </TouchableOpacity>
       </View>
@@ -68,6 +87,7 @@ export default function Step1SelectionScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* 🚀 Sirf ye 2 props pass honge ab */}
         <VehicleSelector
           selectedVehicleId={selectedVehicle}
           onSelectVehicle={handleVehicleSelect}
@@ -88,7 +108,11 @@ export default function Step1SelectionScreen() {
                 <View key={service.id}>
                   <View style={styles.cartItem}>
                     <View style={styles.cartItemLeft}>
-                      <Ionicons name="checkmark-circle" size={20} color={Colors.primary || "#2563EB"} />
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color={Colors.primary || "#2563EB"}
+                      />
                       <Text style={styles.cartItemTitle}>{service.title}</Text>
                     </View>
                     <View style={styles.cartItemRight}>
@@ -143,7 +167,6 @@ const styles = StyleSheet.create({
   center: { justifyContent: "center", alignItems: "center", padding: 20 },
   scrollContent: { padding: 16, paddingBottom: 120 },
 
-  // Missing authentication state styles
   errorText: {
     fontSize: 16,
     fontWeight: "600",
@@ -185,7 +208,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   cartItemLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  cartItemTitle: { fontSize: 15, fontWeight: "600", color: Colors.text || "#1F2937", flexShrink: 1 },
+  cartItemTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.text || "#1F2937",
+    flexShrink: 1,
+  },
   cartItemRight: { flexDirection: "row", alignItems: "center", gap: 16 },
   cartItemPrice: { fontSize: 15, fontWeight: "700", color: Colors.text || "#1F2937" },
   deleteBtn: { padding: 4, backgroundColor: "#FEE2E2", borderRadius: Radius.md || 8 },
@@ -210,7 +238,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...(Shadow.light || {}),
   },
-  emptyCartText: { fontSize: 15, color: Colors.textSecondary || "#6B7280", marginTop: 12, marginBottom: 16 },
+  emptyCartText: {
+    fontSize: 15,
+    color: Colors.textSecondary || "#6B7280",
+    marginTop: 12,
+    marginBottom: 16,
+  },
   browseBtn: {
     borderWidth: 1,
     borderColor: Colors.primary || "#2563EB",

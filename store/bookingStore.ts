@@ -13,6 +13,7 @@ interface BookingState {
   removeService: (serviceId: string) => void;
   clearCart: () => void;
   getTotalPrice: () => number;
+  setCartServices: (services: any[]) => void;
 }
 
 export const useBookingStore = create<BookingState>((set, get) => ({
@@ -40,4 +41,5 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   getTotalPrice: () => {
     return get().selectedServices.reduce((total, service) => total + service.price, 0);
   },
+  setCartServices: (services) => set({ selectedServices: services }),
 }));
