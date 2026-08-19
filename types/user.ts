@@ -9,10 +9,11 @@ export interface UserLocation {
 
 export interface Vehicle {
   id: string;
-  model: string;
   brand: string;
+  model: string;
   category: string;
   registrationNumber: string;
+  created_at?: string;
 }
 
 export type NewVehicle = Omit<Vehicle, "id">;
@@ -22,5 +23,5 @@ export interface LocalUserData {
   location: UserLocation | null;
   vehicles: Vehicle[];
   selectedVehicleId: string | null;
-  lastUpdated: number; // Timestamp for sync checks
+  lastUpdated: number;
 }

@@ -1,11 +1,6 @@
+import { LocalUserData, NewVehicle, UserLocation, Vehicle } from "@/types/user";
+import { supabase } from "@/utils/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  LocalUserData,
-  UserLocation,
-  Vehicle,
-  NewVehicle,
-} from "@/types/user";
-import { supabase } from "@/utils/supabase"; // fallback, sirf jab clerk client na mile
 import { SupabaseClient } from "@supabase/supabase-js";
 
 const USER_DATA_KEY = "@app_user_local_data";
@@ -44,9 +39,7 @@ export const getLocalUserData = async (): Promise<LocalUserData> => {
 /**
  * Internal helper to persist data to AsyncStorage safely
  */
-const saveLocalUserData = async (
-  data: LocalUserData
-): Promise<LocalUserData> => {
+const saveLocalUserData = async (data: LocalUserData): Promise<LocalUserData> => {
   try {
     await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(data));
     return data;
@@ -59,9 +52,7 @@ const saveLocalUserData = async (
 /**
  * Update mobile number locally
  */
-export const savePhoneLocally = async (
-  mobileNumber: string
-): Promise<LocalUserData> => {
+export const savePhoneLocally = async (mobileNumber: string): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
 
   const updatedData: LocalUserData = {
@@ -76,9 +67,7 @@ export const savePhoneLocally = async (
 /**
  * Update location locally
  */
-export const saveLocationLocally = async (
-  location: UserLocation
-): Promise<LocalUserData> => {
+export const saveLocationLocally = async (location: UserLocation): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
 
   const updatedData: LocalUserData = {
@@ -93,14 +82,10 @@ export const saveLocationLocally = async (
 /**
  * Save or update an existing vehicle locally
  */
-export const saveVehicleLocally = async (
-  vehicle: Vehicle
-): Promise<LocalUserData> => {
+export const saveVehicleLocally = async (vehicle: Vehicle): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
 
-  const existingIndex = currentData.vehicles.findIndex(
-    (v) => v.id === vehicle.id
-  );
+  const existingIndex = currentData.vehicles.findIndex((v) => v.id === vehicle.id);
 
   const updatedVehicles = [...currentData.vehicles];
 
@@ -122,19 +107,19 @@ export const saveVehicleLocally = async (
 
 /**
  * ADD NEW VEHICLE:
- * 1. Insert vehicle into Supabase using DB schema mapping (via Clerk-aware client)
- * 2. Return generated ID & row
- * 3. Save mapped Vehicle object into local storage
+ * Inserts into Supabase (make, model, registration_number, vehicle_type)
+ * Maps returned row to Frontend Vehicle (brand, model, registrationNumber, category)
  */
 export const addVehicleWithSync = async (
   vehicle: NewVehicle,
   clerkUserId: string,
-  client: SupabaseClient
+  client: SupabaseClient,
 ): Promise<{ vehicle: Vehicle; userData: LocalUserData }> => {
   if (!clerkUserId) {
     throw new Error("User is not authenticated. Please log in.");
   }
 
+  // Database snake_case payload
   const dbPayload = {
     clerk_user_id: clerkUserId,
     make: vehicle.brand,
@@ -146,24 +131,22 @@ export const addVehicleWithSync = async (
   const { data: insertedRow, error } = await client
     .from("vehicles")
     .insert(dbPayload)
-    .select("*")
+    .select("id, make, model, registration_number, vehicle_type, created_at")
     .single();
 
   if (error || !insertedRow) {
     console.error("[UserStorage] Supabase insert failed:", error);
-    throw new Error(
-      error?.message || "Could not save vehicle to remote database."
-    );
+    throw new Error(error?.message || "Could not save vehicle to remote database.");
   }
 
-  // Map DB Snake Case back to App Camel Case model
+  // Clean mapping to frontend model
   const fullVehicle: Vehicle = {
     id: insertedRow.id,
     brand: insertedRow.make || vehicle.brand,
     model: insertedRow.model || vehicle.model,
     category: insertedRow.vehicle_type || vehicle.category,
-    registrationNumber:
-      insertedRow.registration_number || vehicle.registrationNumber || "",
+    registrationNumber: insertedRow.registration_number || "NOT SPECIFIED",
+    created_at: insertedRow.created_at,
   };
 
   const updatedUserData = await saveVehicleLocally(fullVehicle);
@@ -175,12 +158,12 @@ export const addVehicleWithSync = async (
 };
 
 /**
- * Remove vehicle locally and optionally delete from Supabase
+ * Remove vehicle locally and from Supabase
  */
 export const removeVehicleLocally = async (
   vehicleId: string,
   syncWithSupabase: boolean = true,
-  client?: SupabaseClient
+  client?: SupabaseClient,
 ): Promise<LocalUserData> => {
   if (syncWithSupabase) {
     try {
@@ -192,9 +175,7 @@ export const removeVehicleLocally = async (
 
   const currentData = await getLocalUserData();
 
-  const updatedVehicles = currentData.vehicles.filter(
-    (vehicle) => vehicle.id !== vehicleId
-  );
+  const updatedVehicles = currentData.vehicles.filter((vehicle) => vehicle.id !== vehicleId);
 
   const isSelected = currentData.selectedVehicleId === vehicleId;
 
@@ -217,19 +198,13 @@ export const removeVehicleLocally = async (
 /**
  * Change selected vehicle locally
  */
-export const setSelectedVehicleLocally = async (
-  vehicleId: string
-): Promise<LocalUserData> => {
+export const setSelectedVehicleLocally = async (vehicleId: string): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
 
-  const vehicleExists = currentData.vehicles.some(
-    (vehicle) => vehicle.id === vehicleId
-  );
+  const vehicleExists = currentData.vehicles.some((vehicle) => vehicle.id === vehicleId);
 
   if (!vehicleExists) {
-    console.warn(
-      `[UserStorage] Cannot select vehicle ${vehicleId}: vehicle not found locally.`
-    );
+    console.warn(`[UserStorage] Cannot select vehicle ${vehicleId}: vehicle not found locally.`);
     return currentData;
   }
 

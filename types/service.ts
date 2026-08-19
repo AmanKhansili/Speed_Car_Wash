@@ -8,18 +8,48 @@ export interface Service {
   image: string;
 }
 
+export interface ServiceItem {
+  id: string;
+  title: string;
+  price: number;
+  duration?: string;
+}
+
+// Database schema mapped Booking interface
+export interface Booking {
+  id: string;
+  clerk_user_id: string;
+  user_id: string;
+  service_type: "pickup" | "walkin" | string;
+  service_name: string;
+  services_booked: ServiceItem[];
+  booking_date: string;
+  scheduled_date: string;
+  phone?: string;
+  primary_phone: string;
+  alt_phone?: string;
+  address: string;
+  amount: number;
+  total_amount: number;
+  payment_id?: string | null;
+  status: "Pending" | "Confirmed" | "Failed" | "Cancelled" | "Saved" | "Saved_Template" | string;
+  created_at?: string;
+}
+
 export interface BookingData {
   vehicleId?: string;
   vehicleName?: string;
   serviceId?: string;
   serviceTitle?: string;
-  servicePrice?: number | string; // e.g., 599 or "₹599"
+  servicePrice?: number | string;
   date?: string;
   time?: string;
-  serviceType?: "pickup" | "walkin"; // Doorstep Pickup ya Walk-in Center
+  serviceType?: "pickup" | "walkin";
   address?: string;
   addressText?: string;
-  phone?: string; // Contact mobile number
+  primaryPhone?: string;
+  altPhone?: string;
+  phone?: string;
 }
 
 export interface PaymentSummaryProps {
