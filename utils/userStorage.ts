@@ -1,4 +1,9 @@
-import { LocalUserData, NewVehicle, UserLocation, Vehicle } from "@/types/user";
+import {
+  LocalUserData,
+  NewVehicle,
+  UserLocation,
+  Vehicle,
+} from "@/types/user";
 import { supabase } from "@/utils/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SupabaseClient } from "@supabase/supabase-js";
@@ -43,7 +48,9 @@ export const getLocalUserData = async (): Promise<LocalUserData> => {
   }
 };
 
-const saveLocalUserData = async (data: LocalUserData): Promise<LocalUserData> => {
+const saveLocalUserData = async (
+  data: LocalUserData
+): Promise<LocalUserData> => {
   try {
     await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(data));
     return data;
@@ -78,6 +85,23 @@ export const saveVehicleLocally = async (vehicle: Vehicle): Promise<LocalUserDat
     ...currentData,
     vehicles: updatedVehicles,
     selectedVehicleId: vehicle.id,
+    lastUpdated: Date.now(),
+  });
+};
+
+export const overwriteVehiclesLocally = async (
+  vehicles: Vehicle[],
+  selectedVehicleId: string | null = null
+): Promise<LocalUserData> => {
+  const currentData = await getLocalUserData();
+  const targetSelectedId =
+    selectedVehicleId ||
+    (vehicles.length > 0 ? vehicles[0].id : null);
+
+  return saveLocalUserData({
+    ...currentData,
+    vehicles,
+    selectedVehicleId: targetSelectedId,
     lastUpdated: Date.now(),
   });
 };
@@ -168,7 +192,11 @@ export const setSelectedVehicleLocally = async (vehicleId: string): Promise<Loca
 
 export const clearLocalUserData = async (): Promise<void> => {
   try {
-    await AsyncStorage.multiRemove([USER_DATA_KEY, PROFILE_CACHE_KEY, STATS_CACHE_KEY]);
+    await AsyncStorage.multiRemove([
+      USER_DATA_KEY,
+      PROFILE_CACHE_KEY,
+      STATS_CACHE_KEY,
+    ]);
   } catch (error) {
     console.error("[UserStorage] Error clearing local user data:", error);
   }

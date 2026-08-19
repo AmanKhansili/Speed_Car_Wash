@@ -22,6 +22,7 @@ import {
   Alert,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -58,39 +59,37 @@ export default function ProfileScreen() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Edit Profile Modal States
+  // Edit Profile Modal
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [firstNameInput, setFirstNameInput] = useState("");
   const [lastNameInput, setLastNameInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
+  // Settings Modal
+  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
+
   const fetchUserData = useCallback(
-    async (forceRefresh = false) => {
+    async (showFullLoader = false) => {
       if (!userId) {
         setIsLoading(false);
         return;
       }
 
       try {
-        // 1. Instant Local Cache Fetch
         const cachedProfile = await getCachedProfileData();
         const cachedStats = await getCachedStatsData();
 
         if (cachedProfile) setSupabaseProfile(cachedProfile);
         if (cachedStats) setStats(cachedStats);
 
-        if (!cachedProfile || !cachedStats) {
+        if (showFullLoader && (!cachedProfile || !cachedStats)) {
           setIsLoading(true);
         } else {
           setIsLoading(false);
         }
 
-        if (cachedProfile && cachedStats && !forceRefresh) {
-          return;
-        }
-
-        // 2. Fetch Profile from Supabase
+        // 1. Fetch Profile
         const { data: profileData } = await db
           .from("profiles")
           .select("phone, created_at")
@@ -106,7 +105,7 @@ export default function ProfileScreen() {
           await saveProfileCache(formattedProfile);
         }
 
-        // 3. Fetch Bookings (Quick-Cards & Stats)
+        // 2. Fetch Bookings
         const { data: bookingsData, error: bErr } = await db
           .from("bookings")
           .select("*")
@@ -153,7 +152,7 @@ export default function ProfileScreen() {
     useCallback(() => {
       let isMounted = true;
       if (isLoaded && userId && isMounted) {
-        fetchUserData(true);
+        fetchUserData(false);
       }
       return () => {
         isMounted = false;
@@ -178,13 +177,11 @@ export default function ProfileScreen() {
     try {
       setIsSavingProfile(true);
 
-      // 1. Clerk update
       await user.update({
         firstName: firstNameInput.trim(),
         lastName: lastNameInput.trim(),
       });
 
-      // 2. Supabase update
       const formattedPhone = phoneInput.trim();
       const { error } = await db.from("profiles").upsert(
         {
@@ -212,6 +209,42 @@ export default function ProfileScreen() {
     } finally {
       setIsSavingProfile(false);
     }
+  };
+
+  const handleDeleteSavedCard = async (cardId: string) => {
+    setSavedCards((prev) => prev.filter((c) => c.id !== cardId));
+    setStats((prev) => ({
+      ...prev,
+      totalBookings: Math.max(0, prev.totalBookings - 1),
+      savedServices: Math.max(0, prev.savedServices - 1),
+    }));
+
+    const { error } = await db.from("bookings").delete().eq("id", cardId);
+    if (error) {
+      fetchUserData(false);
+      throw error;
+    }
+  };
+
+  const handleHelpAndSupport = () => {
+    Alert.alert("Help & Support", "How would you like to get assistance?", [
+      {
+        text: "Call Support",
+        onPress: () => Linking.openURL("tel:+919876543210"),
+      },
+      {
+        text: "WhatsApp Us",
+        onPress: () =>
+          Linking.openURL(
+            "whatsapp://send?phone=+919876543210&text=Hi,%20I%20need%20assistance%20with%20my%20car%20wash%20booking.",
+          ).catch(() => Alert.alert("Error", "WhatsApp is not installed on your device.")),
+      },
+      {
+        text: "Email Support",
+        onPress: () => Linking.openURL("mailto:support@speedcarwash.com"),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const handleLogout = async () => {
@@ -249,7 +282,7 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitle}>My Profile</Text>
         <TouchableOpacity
           style={styles.settingsBtn}
-          onPress={() => router.push("/settings" as any)}
+          onPress={() => setIsSettingsModalVisible(true)}
         >
           <Ionicons name="settings-outline" size={22} color={Colors.text || "#0F172A"} />
         </TouchableOpacity>
@@ -270,10 +303,11 @@ export default function ProfileScreen() {
           onPressBanner={() => router.push("/membership" as any)}
         />
 
-        {/* Quick Actions (Saved Cards) */}
+        {/* Quick Actions (Saved Cards with Delete action) */}
         <MyVehiclesSection
           savedCards={savedCards}
           onAddCarPress={() => router.push("/booking/step1-selection" as any)}
+          onDeleteCard={handleDeleteSavedCard}
         />
 
         {/* Stats */}
@@ -292,7 +326,7 @@ export default function ProfileScreen() {
         <ProfileMenuList onLogoutPress={handleLogout} />
       </ScrollView>
 
-      {/* Profile Edit Modal */}
+      {/* Edit Profile Modal */}
       <Modal
         visible={isEditModalVisible}
         animationType="slide"
@@ -369,6 +403,77 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Settings Modal */}
+      <Modal
+        visible={isSettingsModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsSettingsModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsSettingsModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.settingsHeader}>
+              <Text style={styles.modalTitle}>Settings</Text>
+              <TouchableOpacity onPress={() => setIsSettingsModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                setIsSettingsModalVisible(false);
+                handleOpenEditModal();
+              }}
+            >
+              <Ionicons name="person-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Text style={styles.settingItemText}>Account Details</Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                setIsSettingsModalVisible(false);
+                router.push("/membership" as any);
+              }}
+            >
+              <Ionicons name="ribbon-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Text style={styles.settingItemText}>Membership & Plans</Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                setIsSettingsModalVisible(false);
+                handleHelpAndSupport();
+              }}
+            >
+              <Ionicons name="headset-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Text style={styles.settingItemText}>Help & Support</Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.settingItem, { borderBottomWidth: 0 }]}
+              onPress={() => {
+                setIsSettingsModalVisible(false);
+                handleLogout();
+              }}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+              <Text style={[styles.settingItemText, { color: "#EF4444" }]}>Log Out</Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -403,11 +508,30 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: Platform.OS === "ios" ? 36 : 24,
   },
+  settingsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: Colors.text || "#0F172A",
-    marginBottom: 16,
+  },
+  settingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    gap: 12,
+  },
+  settingItemText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#334155",
+    flex: 1,
   },
   inputLabel: {
     fontSize: 13,

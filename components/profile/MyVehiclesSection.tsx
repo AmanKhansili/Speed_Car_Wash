@@ -2,24 +2,34 @@ import Colors from "@/constants/colors";
 import { useBookingStore } from "@/store/bookingStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 interface MyVehiclesSectionProps {
   savedCards?: any[];
   onAddCarPress: () => void;
+  onDeleteCard?: (cardId: string) => Promise<void>;
 }
 
 export default function MyVehiclesSection({
   savedCards = [],
   onAddCarPress,
+  onDeleteCard,
 }: MyVehiclesSectionProps) {
   const router = useRouter();
   const { setCartServices } = useBookingStore();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const hasCards = savedCards && savedCards.length > 0;
 
   const handleQuickBookNow = (card: any) => {
-    // 1. Populate Zustand Cart
     const servicesList = Array.isArray(card.services_booked)
       ? card.services_booked
       : card.services_booked?.items || [];
@@ -28,13 +38,11 @@ export default function MyVehiclesSection({
       setCartServices(servicesList);
     }
 
-    // 2. Extract coupon & discount
     const preCoupon = card.services_booked?.coupon || "";
     const preDiscount = card.services_booked?.discount_amount
       ? String(card.services_booked.discount_amount)
       : "";
 
-    // 3. Navigate to Step 2
     router.push({
       pathname: "/booking/step2-datetime" as any,
       params: {
@@ -49,10 +57,35 @@ export default function MyVehiclesSection({
     });
   };
 
+  const confirmDeleteCard = (cardId: string, serviceName: string) => {
+    Alert.alert(
+      "Delete Saved Card",
+      `Are you sure you want to remove "${serviceName}" from Quick Actions?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            if (!onDeleteCard) return;
+            setDeletingId(cardId);
+            try {
+              await onDeleteCard(cardId);
+            } catch (err: any) {
+              Alert.alert("Error", err?.message || "Could not delete card.");
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Quick-Book Saved Cards</Text>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
         <TouchableOpacity style={styles.addBtn} activeOpacity={0.7} onPress={onAddCarPress}>
           <Ionicons name="add" size={16} color={Colors.primary || "#2563EB"} />
           <Text style={styles.addBtnText}>Add Car</Text>
@@ -61,8 +94,8 @@ export default function MyVehiclesSection({
 
       {!hasCards ? (
         <TouchableOpacity style={styles.emptyCard} activeOpacity={0.8} onPress={onAddCarPress}>
-          <Ionicons name="car-outline" size={32} color={Colors.primary || "#2563EB"} />
-          <Text style={styles.emptyTitle}>No quick-book cards saved</Text>
+          <Ionicons name="flash-outline" size={32} color={Colors.primary || "#2563EB"} />
+          <Text style={styles.emptyTitle}>No quick-action cards saved</Text>
           <Text style={styles.emptySubText}>Tap here to select vehicle and services</Text>
         </TouchableOpacity>
       ) : (
@@ -80,7 +113,9 @@ export default function MyVehiclesSection({
               "Car Wash Service";
 
             const carName =
-              card.services_booked?.vehicle?.name || card.vehicle_name || "Saved Vehicle";
+              card.services_booked?.vehicle?.name ||
+              card.vehicle_name ||
+              "Saved Vehicle";
 
             const serviceType = card.service_type === "pickup" ? "Pickup" : "Walk-in";
             const contactPhone = card.primary_phone || card.phone || "N/A";
@@ -88,6 +123,7 @@ export default function MyVehiclesSection({
               card.address ||
               (card.service_type === "pickup" ? "Saved Pickup Location" : "Service Hub");
             const price = card.total_amount ?? card.amount ?? 0;
+            const isDeleting = deletingId === card.id;
 
             return (
               <View key={card.id} style={styles.card}>
@@ -98,8 +134,24 @@ export default function MyVehiclesSection({
                       {serviceName}
                     </Text>
                   </View>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{serviceType}</Text>
+
+                  <View style={styles.headerRightActions}>
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{serviceType}</Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.deleteCardBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      onPress={() => confirmDeleteCard(card.id, serviceName)}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <ActivityIndicator size="small" color="#EF4444" />
+                      ) : (
+                        <Ionicons name="trash-outline" size={17} color="#9CA3AF" />
+                      )}
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -153,7 +205,6 @@ export default function MyVehiclesSection({
 const styles = StyleSheet.create({
   container: { marginBottom: 16 },
   sectionHeader: {
-    paddingHorizontal:10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -188,7 +239,7 @@ const styles = StyleSheet.create({
   emptySubText: { fontSize: 12, color: "#64748B", marginTop: 2 },
   scrollContent: { gap: 12, paddingBottom: 6 },
   card: {
-    width: 275,
+    width: 285,
     backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 16,
@@ -203,8 +254,14 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
   serviceName: { fontSize: 15, fontWeight: "800", color: "#1F2937", flex: 1 },
+  headerRightActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   badge: { backgroundColor: "#EFF6FF", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   badgeText: { fontSize: 11, fontWeight: "700", color: Colors.primary || "#2563EB" },
+  deleteCardBtn: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: "#F8FAFC",
+  },
   carTag: {
     flexDirection: "row",
     alignItems: "center",
