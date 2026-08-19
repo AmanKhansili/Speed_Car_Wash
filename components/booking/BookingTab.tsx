@@ -1,8 +1,7 @@
 import Colors from "@/constants/colors";
-import useUser from "@/context/userContext";
 import { createClerkSupabaseClient } from "@/utils/supabase";
-import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -16,48 +15,28 @@ import {
   View,
 } from "react-native";
 
-export interface Booking {
+export interface BookingDisplayItem {
   id: string;
   title: string;
   price: string;
   date: string;
   address: string;
   phone: string;
-  status: "Confirmed" | "Pending" | "Cancelled" | "Completed" | "Failed";
+  status: "Confirmed" | "Pending" | "Cancelled" | "Completed" | "Failed" | string;
   type: "upcoming" | "past";
-  image?: any;
 }
 
 export default function BookingTabs() {
   const router = useRouter();
-  const { userId, getToken } = useAuth(); // getToken bhi nikala
+  const { userId, getToken } = useAuth();
 
-  // Clerk-aware Supabase client — RLS ke liye zaroori
-  const clerkSupabase = useMemo(
-    () => createClerkSupabaseClient(getToken),
-    [getToken],
-  );
-
-  const { userData } = useUser() as any;
+  const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [loading, setLoading] = useState(true);
-
-  const defaultBookings: Booking[] = [];
-
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    if (
-      userData?.bookings &&
-      Array.isArray(userData.bookings) &&
-      userData.bookings.length > 0
-    ) {
-      return userData.bookings as Booking[];
-    }
-    return defaultBookings;
-  });
+  const [bookings, setBookings] = useState<BookingDisplayItem[]>([]);
 
   useEffect(() => {
-    console.log("🔍 [Bookings] useEffect fired, userId:", userId);
     if (userId) {
       fetchSupabaseBookings();
     } else {
@@ -68,101 +47,98 @@ export default function BookingTabs() {
   const fetchSupabaseBookings = async () => {
     try {
       setLoading(true);
-      console.log("🔍 [Bookings] Fetching for userId:", userId);
 
       const { data, error } = await clerkSupabase
         .from("bookings")
         .select("*")
-        .eq("clerk_user_id", userId)
+        .or(`clerk_user_id.eq.${userId},user_id.eq.${userId}`)
+        .not("status", "in", '("Saved","Saved_Template","saved")')
         .order("created_at", { ascending: false });
-
-      console.log("🔍 [Bookings] error:", error);
-      console.log("🔍 [Bookings] data count:", data?.length, data);
 
       if (error) throw error;
 
       if (data) {
-        // Naye schema ke hisaab se map kar rahe hain: har row ek alag service/booking hai
-        const formattedBookings: Booking[] = data.map((item: any) => {
-          const isCancelledOrFailed =
-            item.status === "Cancelled" || item.status === "Failed";
-          const isPast = isCancelledOrFailed || item.status === "Completed";
+        const formattedBookings: BookingDisplayItem[] = data.map((item: any) => {
+          const statusLower = item.status?.toLowerCase() || "";
+          const isPast =
+            statusLower === "completed" || statusLower === "cancelled" || statusLower === "failed";
+
+          const title =
+            item.service_name ||
+            (item.services_booked && item.services_booked[0]?.title) ||
+            "Car Wash Service";
+
+          const displayDate =
+            item.booking_date ||
+            (item.scheduled_date
+              ? new Date(item.scheduled_date).toLocaleDateString()
+              : "Scheduled Soon");
+
+          const displayPrice = `₹${item.total_amount ?? item.amount ?? 0}`;
+          const displayPhone = item.primary_phone || item.phone || "N/A";
+          const displayAddress =
+            item.address ||
+            (item.service_type === "pickup" ? "Pickup Requested" : "Workshop Center");
 
           return {
             id: item.id,
-            title: item.service_name || "Car Service",
-            price: `₹${item.amount ?? 0}`,
-            date: item.scheduled_date || "Scheduled Soon",
-            address:
-              item.service_type === "pickup"
-                ? "Pickup Requested"
-                : "Workshop Center",
+            title,
+            price: displayPrice,
+            date: displayDate,
+            address: displayAddress,
             status: item.status || "Pending",
-            phone: item.phone || "N/A",
+            phone: displayPhone,
             type: isPast ? "past" : "upcoming",
           };
         });
 
-        console.log("🔍 [Bookings] formatted:", formattedBookings);
         setBookings(formattedBookings);
       }
     } catch (error) {
-      console.log(
-        "❌ [Bookings] Failed to fetch bookings from Supabase",
-        error,
-      );
+      console.log("❌ [Bookings] Failed to fetch bookings from Supabase", error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancel = async (id: string) => {
-    Alert.alert(
-      "Cancel Booking",
-      "Are you sure you want to cancel this booking?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, Cancel",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const { error } = await clerkSupabase
-                .from("bookings")
-                .update({ status: "Cancelled" })
-                .eq("id", id);
+    Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes, Cancel",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const { error } = await clerkSupabase
+              .from("bookings")
+              .update({ status: "Cancelled" })
+              .eq("id", id);
 
-              if (error) throw error;
+            if (error) throw error;
 
-              const updated = bookings.map((item) => {
-                if (item.id === id) {
-                  return {
-                    ...item,
-                    status: "Cancelled" as const,
-                    type: "past" as const,
-                  };
-                }
-                return item;
-              });
-              setBookings(updated);
-            } catch (err: any) {
-              Alert.alert("Error", "Could not cancel booking");
-            }
-          },
+            setBookings((prev) =>
+              prev.map((item) =>
+                item.id === id ? { ...item, status: "Cancelled", type: "past" } : item,
+              ),
+            );
+          } catch (err: any) {
+            Alert.alert("Error", "Could not cancel booking");
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const filteredBookings = bookings.filter((item) => {
+    const statusLower = item.status.toLowerCase();
     if (activeTab === "upcoming") {
-      return item.type === "upcoming" && item.status !== "Cancelled";
+      return item.type === "upcoming" && statusLower !== "cancelled";
     } else {
-      return item.type === "past" || item.status === "Cancelled";
+      return item.type === "past" || statusLower === "cancelled";
     }
   });
 
-  const renderBookingCard = ({ item }: { item: Booking }) => (
+  const renderBookingCard = ({ item }: { item: BookingDisplayItem }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Image
@@ -208,7 +184,7 @@ export default function BookingTabs() {
         </View>
       </View>
 
-      {item.type === "upcoming" && item.status !== "Cancelled" && (
+      {item.type === "upcoming" && item.status.toLowerCase() !== "cancelled" && (
         <TouchableOpacity
           style={styles.cancelBtn}
           onPress={() => handleCancel(item.id)}
@@ -224,37 +200,21 @@ export default function BookingTabs() {
     <View style={styles.container}>
       <View style={styles.tabHeader}>
         <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "upcoming" && styles.activeTabButton,
-          ]}
+          style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
           onPress={() => setActiveTab("upcoming")}
           activeOpacity={0.8}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "upcoming" && styles.activeTabText,
-            ]}
-          >
+          <Text style={[styles.tabText, activeTab === "upcoming" && styles.activeTabText]}>
             Upcoming
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "past" && styles.activeTabButton,
-          ]}
+          style={[styles.tabButton, activeTab === "past" && styles.activeTabButton]}
           onPress={() => setActiveTab("past")}
           activeOpacity={0.8}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "past" && styles.activeTabText,
-            ]}
-          >
+          <Text style={[styles.tabText, activeTab === "past" && styles.activeTabText]}>
             Past & Cancelled
           </Text>
         </TouchableOpacity>
@@ -280,8 +240,8 @@ export default function BookingTabs() {
           data={filteredBookings}
           keyExtractor={(item) => item.id}
           renderItem={renderBookingCard}
-          scrollEnabled={false}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
         />
       ) : (
         <View style={styles.emptyBox}>
@@ -294,7 +254,7 @@ export default function BookingTabs() {
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 10 },
+  container: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
   tabHeader: {
     flexDirection: "row",
     backgroundColor: "#E2E8F0",

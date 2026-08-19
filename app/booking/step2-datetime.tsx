@@ -1,6 +1,11 @@
+import AddressSelector from "@/components/booking/AddressSelector";
+import DateTimeSelector from "@/components/booking/DateTimeSelector";
+import Colors from "@/constants/colors";
+import { createClerkSupabaseClient } from "@/utils/supabase";
+import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,68 +17,105 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // 🚀 SafeAreaView add kiya hai
-
-import AddressSelector from "@/components/booking/AddressSelector";
-import DateTimeSelector from "@/components/booking/DateTimeSelector";
-import Colors from "@/constants/colors";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Step2DateTimeScreen() {
   const router = useRouter();
+  const { userId, getToken } = useAuth();
 
-  const params = useLocalSearchParams<{ vehicleId?: string; serviceId?: string }>();
-  const { vehicleId, serviceId } = params;
+  const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
+
+  const params = useLocalSearchParams<{
+    vehicleId?: string;
+    serviceId?: string;
+    serviceType?: string;
+    primaryPhone?: string;
+    altPhone?: string;
+    addressText?: string;
+    preAppliedCoupon?: string;
+    preDiscount?: string;
+  }>();
 
   const [selectedDate, setSelectedDate] = useState<string>("");
-  const [serviceType, setServiceType] = useState<"pickup" | "walkin">("pickup");
+  const [serviceType, setServiceType] = useState<"pickup" | "walkin">(
+    (params.serviceType as "pickup" | "walkin") || "pickup",
+  );
 
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
-  const [addressText, setAddressText] = useState<string>("");
+  const [addressText, setAddressText] = useState<string>(params.addressText || "");
 
-  const [primaryPhone, setPrimaryPhone] = useState("");
-  const [altPhone, setAltPhone] = useState("");
+  const [primaryPhone, setPrimaryPhone] = useState(params.primaryPhone || "");
+  const [altPhone, setAltPhone] = useState(params.altPhone || "");
+
+  // Update address and phone if passed in params
+  useEffect(() => {
+    if (params.addressText) setAddressText(params.addressText);
+    if (params.primaryPhone) setPrimaryPhone(params.primaryPhone);
+    if (params.altPhone) setAltPhone(params.altPhone);
+  }, [params.addressText, params.primaryPhone, params.altPhone]);
+
+  // Fallback: If no phone in params, fetch from profile
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!userId || primaryPhone) return;
+      try {
+        const { data } = await clerkSupabase
+          .from("profiles")
+          .select("phone")
+          .eq("clerk_user_id", userId)
+          .maybeSingle();
+
+        if (data && data.phone) {
+          setPrimaryPhone(data.phone);
+        }
+      } catch (err) {
+        console.error("Error fetching profile phone:", err);
+      }
+    };
+
+    fetchUserProfile();
+  }, [userId]);
 
   const handleContinue = () => {
     if (!selectedDate) {
       Alert.alert("Selection Required", "Please select a date & time slot.");
       return;
     }
-    if (!primaryPhone || primaryPhone.length < 10) {
+    if (!primaryPhone || primaryPhone.trim().length < 10) {
       Alert.alert("Contact Required", "Please enter a valid 10-digit primary phone number.");
       return;
     }
 
-    let fullAddressText = "Walk-in at Workshop Center";
+    let fullAddressText = "Workshop Center";
 
     if (serviceType === "pickup") {
-      if (!selectedAddressId) {
-        Alert.alert("Address Required", "Please select a pickup address.");
+      if (!addressText && !selectedAddressId) {
+        Alert.alert("Address Required", "Please select or provide a pickup address.");
         return;
       }
-      fullAddressText = addressText || "Address not provided";
+      fullAddressText = addressText || "Pickup Location";
     }
 
     router.push({
       pathname: "/booking/summary",
       params: {
-        vehicleId,
-        serviceId,
+        vehicleId: params.vehicleId,
+        serviceId: params.serviceId,
         date: selectedDate,
         serviceType,
-        addressId: serviceType === "pickup" ? selectedAddressId : "walkin",
         addressText: fullAddressText,
-        primaryPhone,
-        altPhone,
+        primaryPhone: primaryPhone.trim(),
+        altPhone: altPhone.trim(),
+        preAppliedCoupon: params.preAppliedCoupon || "",
+        preDiscount: params.preDiscount || "",
       },
     });
   };
 
   return (
-    // 🚀 SafeAreaView ensures screen limits match the physical device bounds
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        // 🚀 Android par "height" behavior screen ko perfect shrink karega jisse button bahar nahi jayega
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
@@ -123,7 +165,7 @@ export default function Step2DateTimeScreen() {
                   setSelectedAddressId(id);
                   setAddressText(fullAddressString);
                 }}
-                onAddNewAddress={() => console.log("Add New Address Modal")}
+                onAddNewAddress={() => console.log("Add New Address")}
               />
             ) : (
               <View style={styles.walkinCard}>
@@ -159,7 +201,6 @@ export default function Step2DateTimeScreen() {
           </View>
         </ScrollView>
 
-        {/* 🚀 Footer apni jagah par lock rahega */}
         <View style={styles.footer}>
           <TouchableOpacity style={styles.continueBtn} activeOpacity={0.8} onPress={handleContinue}>
             <Text style={styles.btnText}>View Summary & Pay</Text>
@@ -174,7 +215,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
   keyboardView: { flex: 1 },
   scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 40 }, // Thoda margin inputs k niche
+  scrollContent: { paddingBottom: 40 },
   optionSection: { paddingHorizontal: 16, marginTop: 24 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: "#111827", marginBottom: 4 },
   typeContainer: { flexDirection: "row", gap: 12, marginTop: 8 },
