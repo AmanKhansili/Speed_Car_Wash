@@ -36,6 +36,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface SupabaseProfile {
+  name?: string | null;
   phone: string | null;
   created_at: string;
 }
@@ -89,15 +90,16 @@ export default function ProfileScreen() {
           setIsLoading(false);
         }
 
-        // 1. Fetch Profile
+        // 1. Fetch Profile (matches Supabase schema with 'name' column)
         const { data: profileData } = await db
           .from("profiles")
-          .select("phone, created_at")
+          .select("name, phone, created_at")
           .eq("clerk_user_id", userId)
           .maybeSingle();
 
         if (profileData) {
           const formattedProfile = {
+            name: profileData.name,
             phone: profileData.phone,
             created_at: profileData.created_at,
           };
@@ -177,15 +179,21 @@ export default function ProfileScreen() {
     try {
       setIsSavingProfile(true);
 
+      // 1. Clerk update
       await user.update({
         firstName: firstNameInput.trim(),
         lastName: lastNameInput.trim(),
       });
 
+      // 2. Supabase update (Mapped strictly to 'name' and 'phone' column)
+      const combinedFullName = `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
       const formattedPhone = phoneInput.trim();
+
       const { error } = await db.from("profiles").upsert(
         {
           clerk_user_id: user.id,
+          name: combinedFullName,
+          email: user.primaryEmailAddress?.emailAddress || null,
           phone: formattedPhone,
           updated_at: new Date().toISOString(),
         },
@@ -195,6 +203,7 @@ export default function ProfileScreen() {
       if (error) throw error;
 
       const updatedProfile: SupabaseProfile = {
+        name: combinedFullName,
         created_at: supabaseProfile?.created_at || new Date().toISOString(),
         phone: formattedPhone,
       };
@@ -303,7 +312,7 @@ export default function ProfileScreen() {
           onPressBanner={() => router.push("/membership" as any)}
         />
 
-        {/* Quick Actions (Saved Cards with Delete action) */}
+        {/* Quick Actions */}
         <MyVehiclesSection
           savedCards={savedCards}
           onAddCarPress={() => router.push("/booking/step1-selection" as any)}
