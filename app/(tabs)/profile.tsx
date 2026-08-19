@@ -1,87 +1,61 @@
-import React, {
-  useState,
-  useCallback,
-  useMemo,
-  useRef,
-  useEffect,
-} from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useFocusEffect } from "expo-router";
-import { useUser, useClerk, useAuth } from "@clerk/expo";
-import { createClerkSupabaseClient } from "@/utils/supabase";
-
-import Colors from "@/constants/colors";
-import UserInfoCard from "@/components/profile/userInfoCard";
-import MembershipBanner from "@/components/profile/MembershipBanner";
-import ProfileStats from "@/components/profile/ProfileStats";
-import ProfileMenuList from "@/components/profile/ProfileMenuList";
-import MyVehiclesSection, {
-  Vehicle,
-} from "@/components/profile/MyVehiclesSection";
 import AuthGate from "@/components/auth/AuthGate";
-
+import MembershipBanner from "@/components/profile/MembershipBanner";
+import MyVehiclesSection from "@/components/profile/MyVehiclesSection";
+import ProfileMenuList from "@/components/profile/ProfileMenuList";
+import ProfileStats from "@/components/profile/ProfileStats";
+import UserInfoCard from "@/components/profile/userInfoCard";
+import Colors from "@/constants/colors";
+import { createClerkSupabaseClient } from "@/utils/supabase";
 import {
-  getCachedProfileData,
-  saveProfileCache,
-  getCachedStatsData,
-  saveStatsCache,
   clearLocalUserData,
+  getCachedProfileData,
+  getCachedStatsData,
+  saveProfileCache,
+  saveStatsCache,
 } from "@/utils/userStorage";
+import { useAuth, useClerk, useUser } from "@clerk/expo";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface SupabaseProfile {
   phone: string | null;
   created_at: string;
 }
 
-interface UserStats {
-  totalBookings: number;
-  completed: number;
-  upcoming: number;
-  savedServices: number;
-}
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useClerk();
-  const { user, isLoaded: isClerkLoaded, isSignedIn } = useUser();
-  const { getToken } = useAuth();
+  const { user, isLoaded: isUserLoaded, isSignedIn } = useUser();
+  const { userId, getToken, isLoaded: isAuthLoaded } = useAuth();
 
-  const getTokenRef = useRef(getToken);
-  useEffect(() => {
-    getTokenRef.current = getToken;
-  }, [getToken]);
+  const isLoaded = isUserLoaded && isAuthLoaded;
+  const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
-  const db = useMemo(
-    () => createClerkSupabaseClient(() => getTokenRef.current()),
-    [],
-  );
-
-  // Local States
-  const [supabaseProfile, setSupabaseProfile] =
-    useState<SupabaseProfile | null>(null);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [stats, setStats] = useState<UserStats>({
+  const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
+  const [savedCards, setSavedCards] = useState<any[]>([]);
+  const [stats, setStats] = useState({
     totalBookings: 0,
     completed: 0,
     upcoming: 0,
     savedServices: 0,
   });
-
   const [isLoading, setIsLoading] = useState(true);
 
   // Edit Profile Modal States
@@ -93,55 +67,34 @@ export default function ProfileScreen() {
 
   const fetchUserData = useCallback(
     async (forceRefresh = false) => {
-      if (!user) return;
+      if (!userId) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
-        // 1. Instant Local Cache Fetch (Zero Delay)
+        // 1. Instant Local Cache Fetch
         const cachedProfile = await getCachedProfileData();
         const cachedStats = await getCachedStatsData();
 
-        if (cachedProfile) {
-          setSupabaseProfile(cachedProfile);
-        }
+        if (cachedProfile) setSupabaseProfile(cachedProfile);
+        if (cachedStats) setStats(cachedStats);
 
-        if (cachedStats) {
-          setStats(cachedStats);
-        }
-
-        // Agar Cache nahi hai, tabhi full-screen loading spinner dikhao
         if (!cachedProfile || !cachedStats) {
           setIsLoading(true);
         } else {
-          // Cache milne par immediate spinner off kar do
           setIsLoading(false);
         }
 
-        // 2. Fetch Vehicles (Background / Non-blocking)
-        const { data: vehicleData } = await db
-          .from("vehicles")
-          .select("id, make, model, vehicle_type, registration_number")
-          .eq("clerk_user_id", user.id);
-
-        if (vehicleData) {
-          const formattedVehicles: Vehicle[] = vehicleData.map((v) => ({
-            id: v.id,
-            name: `${v.make || ""} ${v.model || ""}`.trim() || "My Car",
-            type: v.vehicle_type || "Car",
-            number: v.registration_number || "N/A",
-          }));
-          setVehicles(formattedVehicles);
-        }
-
-        // 3. Agar local cache available hai aur forceRefresh false hai, toh DB re-fetch skip karke exit karo
         if (cachedProfile && cachedStats && !forceRefresh) {
           return;
         }
 
-        // 4. Stale-While-Revalidate / Fallback DB Queries
+        // 2. Fetch Profile from Supabase
         const { data: profileData } = await db
           .from("profiles")
           .select("phone, created_at")
-          .eq("clerk_user_id", user.id)
+          .eq("clerk_user_id", userId)
           .maybeSingle();
 
         if (profileData) {
@@ -153,57 +106,61 @@ export default function ProfileScreen() {
           await saveProfileCache(formattedProfile);
         }
 
-        const { count: totalCount } = await db
+        // 3. Fetch Bookings (Quick-Cards & Stats)
+        const { data: bookingsData, error: bErr } = await db
           .from("bookings")
-          .select("*", { count: "exact", head: true })
-          .eq("clerk_user_id", user.id);
+          .select("*")
+          .or(`clerk_user_id.eq.${userId},user_id.eq.${userId}`)
+          .order("created_at", { ascending: false });
 
-        const { count: completedCount } = await db
-          .from("bookings")
-          .select("*", { count: "exact", head: true })
-          .eq("clerk_user_id", user.id)
-          .eq("status", "Completed");
+        if (!bErr && bookingsData) {
+          const quickCards = bookingsData.filter(
+            (b: any) =>
+              b.status === "Saved" ||
+              b.status === "Saved_Template" ||
+              b.status?.toLowerCase() === "saved",
+          );
+          setSavedCards(quickCards);
 
-        const { count: upcomingCount } = await db
-          .from("bookings")
-          .select("*", { count: "exact", head: true })
-          .eq("clerk_user_id", user.id)
-          .in("status", ["Confirmed", "Pending"]);
+          const completed = bookingsData.filter(
+            (b: any) => b.status?.toLowerCase() === "completed",
+          ).length;
 
-        const { count: savedCount } = await db
-          .from("saved_services")
-          .select("*", { count: "exact", head: true })
-          .eq("clerk_user_id", user.id);
+          const upcoming = bookingsData.filter((b: any) =>
+            ["confirmed", "pending", "upcoming"].includes(b.status?.toLowerCase()),
+          ).length;
 
-        const freshStats: UserStats = {
-          totalBookings: totalCount || 0,
-          completed: completedCount || 0,
-          upcoming: upcomingCount || 0,
-          savedServices: savedCount || 0,
-        };
+          const freshStats = {
+            totalBookings: bookingsData.length,
+            completed,
+            upcoming,
+            savedServices: quickCards.length,
+          };
 
-        setStats(freshStats);
-        await saveStatsCache(freshStats);
+          setStats(freshStats);
+          await saveStatsCache(freshStats);
+        }
       } catch (error) {
         console.error("Error fetching user profile data:", error);
       } finally {
         setIsLoading(false);
       }
     },
-    [user, db],
+    [userId, db],
   );
 
   useFocusEffect(
     useCallback(() => {
-      if (isClerkLoaded && user) {
-        fetchUserData();
-      } else if (isClerkLoaded && !user) {
-        setIsLoading(false);
+      let isMounted = true;
+      if (isLoaded && userId && isMounted) {
+        fetchUserData(true);
       }
-    }, [isClerkLoaded, user, fetchUserData]),
+      return () => {
+        isMounted = false;
+      };
+    }, [userId, isLoaded, fetchUserData]),
   );
 
-  // Modal Kholne Ke Liye Helper Function
   const handleOpenEditModal = () => {
     setFirstNameInput(user?.firstName || "");
     setLastNameInput(user?.lastName || "");
@@ -211,10 +168,8 @@ export default function ProfileScreen() {
     setIsEditModalVisible(true);
   };
 
-  // Profile Save Handling (Clerk + Supabase Sync + Local Cache Update)
   const handleSaveProfile = async () => {
     if (!user) return;
-
     if (!firstNameInput.trim()) {
       Alert.alert("Validation Error", "Please enter your first name.");
       return;
@@ -223,13 +178,13 @@ export default function ProfileScreen() {
     try {
       setIsSavingProfile(true);
 
-      // 1. Clerk update (First Name and Last Name)
+      // 1. Clerk update
       await user.update({
         firstName: firstNameInput.trim(),
         lastName: lastNameInput.trim(),
       });
 
-      // 2. Supabase update (Phone Number)
+      // 2. Supabase update
       const formattedPhone = phoneInput.trim();
       const { error } = await db.from("profiles").upsert(
         {
@@ -247,7 +202,6 @@ export default function ProfileScreen() {
         phone: formattedPhone,
       };
 
-      // 3. Update local state and local AsyncStorage cache immediately
       setSupabaseProfile(updatedProfile);
       await saveProfileCache(updatedProfile);
 
@@ -258,12 +212,6 @@ export default function ProfileScreen() {
     } finally {
       setIsSavingProfile(false);
     }
-  };
-
-  const formatMemberSince = (isoDate: string | null) => {
-    if (!isoDate) return "New Member";
-    const date = new Date(isoDate);
-    return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   };
 
   const handleLogout = async () => {
@@ -285,7 +233,7 @@ export default function ProfileScreen() {
     ]);
   };
 
-  if (!isClerkLoaded) {
+  if (!isLoaded) {
     return (
       <View style={[styles.container, styles.loadingCenter]}>
         <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
@@ -293,70 +241,51 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!isSignedIn) {
-    return <AuthGate />;
-  }
-
-  if (isLoading) {
-    return (
-      <View style={[styles.container, styles.loadingCenter]}>
-        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
-      </View>
-    );
-  }
+  if (!isSignedIn) return <AuthGate />;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Profile</Text>
         <TouchableOpacity
           style={styles.settingsBtn}
-          activeOpacity={0.7}
           onPress={() => router.push("/settings" as any)}
         >
-          <Ionicons
-            name="settings-outline"
-            size={22}
-            color={Colors.text || "#0F172A"}
-          />
+          <Ionicons name="settings-outline" size={22} color={Colors.text || "#0F172A"} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <UserInfoCard
           phone={supabaseProfile?.phone}
           onEditPress={handleOpenEditModal}
           onAddPhone={handleOpenEditModal}
           onAddEmail={() =>
-            Alert.alert(
-              "Email Address",
-              "Email is managed securely via account settings.",
-            )
+            Alert.alert("Email Address", "Email is managed securely via account settings.")
           }
         />
 
         <MembershipBanner
-          memberSince={formatMemberSince(supabaseProfile?.created_at ?? null)}
+          memberSince="New Member"
           onPressBanner={() => router.push("/membership" as any)}
         />
 
+        {/* Quick Actions (Saved Cards) */}
         <MyVehiclesSection
-          vehicles={vehicles}
+          savedCards={savedCards}
           onAddCarPress={() => router.push("/booking/step1-selection" as any)}
-          onCarPress={() => router.push(`/booking/step1-selection` as any)}
         />
 
+        {/* Stats */}
         <ProfileStats
           totalBookings={stats.totalBookings}
           completed={stats.completed}
           upcoming={stats.upcoming}
           savedServices={stats.savedServices}
           onStatPress={(type) => {
-            if (type === "saved") router.push("/saved-services" as any);
-            else router.push("/(tabs)/bookings" as any);
+            type === "saved"
+              ? router.push("/saved-services" as any)
+              : router.push("/(tabs)/bookings" as any);
           }}
         />
 
@@ -440,45 +369,28 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-  },
-  loadingCenter: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  container: { flex: 1, backgroundColor: "#F8FAFC" },
+  loadingCenter: { justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 50,
+    paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: Colors.text || "#0F172A",
-  },
-  settingsBtn: {
-    padding: 6,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  keyboardContainer: {
-    flex: 1,
-  },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: Colors.text || "#0F172A" },
+  settingsBtn: { padding: 6 },
+  scrollContent: { padding: 16, paddingBottom: 40 },
+  keyboardContainer: { flex: 1 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.5)",
@@ -514,11 +426,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.text || "#0F172A",
   },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
-  },
+  modalActions: { flexDirection: "row", gap: 12, marginTop: 24 },
   modalCancelBtn: {
     flex: 1,
     paddingVertical: 14,
@@ -526,11 +434,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
     alignItems: "center",
   },
-  modalCancelText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#64748B",
-  },
+  modalCancelText: { fontSize: 15, fontWeight: "600", color: "#64748B" },
   modalSaveBtn: {
     flex: 1,
     paddingVertical: 14,
@@ -538,9 +442,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary || "#2563EB",
     alignItems: "center",
   },
-  modalSaveText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
+  modalSaveText: { fontSize: 15, fontWeight: "600", color: "#FFFFFF" },
 });

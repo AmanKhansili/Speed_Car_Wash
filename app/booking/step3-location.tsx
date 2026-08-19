@@ -28,43 +28,42 @@ export default function Step3LocationScreen() {
 
   // Address States
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
-  const [addressText, /*setAddressText*/] = useState<string>("");
+  const [addressText, setAddressText] = useState<string>("");
 
-  const [phone, setPhone] = useState<string>(userData.mobileNumber || "");
+  const [primaryPhone, setPrimaryPhone] = useState<string>(userData.mobileNumber || "");
+  const [altPhone, setAltPhone] = useState<string>("");
 
   useEffect(() => {
-    if (userData.mobileNumber && !phone) {
-      setPhone(userData.mobileNumber);
+    if (userData.mobileNumber && !primaryPhone) {
+      setPrimaryPhone(userData.mobileNumber);
     }
   }, [userData.mobileNumber]);
 
   const handleContinue = async () => {
-    // 1. Phone number validation
-    if (!phone || phone.trim().length !== 10) {
-      Alert.alert("Invalid Phone", "Please enter a valid 10-digit mobile number.");
+    if (!primaryPhone || primaryPhone.trim().length < 10) {
+      Alert.alert("Invalid Phone", "Please enter a valid 10-digit primary mobile number.");
       return;
     }
 
-    let fullAddressText = "Walk-in at Workshop Center";
+    let fullAddressText = "Workshop Center";
 
-    // 2. Service type & Address validation
     if (serviceType === "pickup") {
-      if (!selectedAddressId) {
+      if (!selectedAddressId && !addressText) {
         Alert.alert("Address Required", "Please select a pickup address to proceed.");
         return;
       }
-      fullAddressText = addressText || "Selected Pickup Address";
+      fullAddressText = addressText || "Pickup Location";
     }
 
     try {
-      if (phone !== userData.mobileNumber) {
-        await updatePhone(phone);
+      if (primaryPhone !== userData.mobileNumber) {
+        await updatePhone(primaryPhone);
       }
     } catch (e) {
       console.log("Error updating phone:", e);
     }
 
-    // 3. Navigate to Summary/Payment screen with params
+    // Pass synchronized keys to summary.tsx
     router.push({
       pathname: "/booking/summary",
       params: {
@@ -72,7 +71,8 @@ export default function Step3LocationScreen() {
         serviceType,
         addressId: serviceType === "pickup" ? selectedAddressId : "walkin",
         addressText: fullAddressText,
-        phone,
+        primaryPhone: primaryPhone.trim(),
+        altPhone: altPhone.trim(),
       },
     });
   };
@@ -84,7 +84,6 @@ export default function Step3LocationScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Service Type Selection (Pickup vs Walk-in) */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Select Service Type</Text>
           <View style={styles.toggleWrapper}>
@@ -124,12 +123,12 @@ export default function Step3LocationScreen() {
           </View>
         </View>
 
-        {/* Conditional Address or Workshop Info */}
         {serviceType === "pickup" ? (
           <AddressSelector
             selectedAddressId={selectedAddressId}
-            onSelectAddress={(id) => {
+            onSelectAddress={(id, fullAddressString) => {
               setSelectedAddressId(id);
+              setAddressText(fullAddressString);
             }}
             onAddNewAddress={() => console.log("Add New Address modal/screen")}
           />
@@ -145,9 +144,8 @@ export default function Step3LocationScreen() {
           </View>
         )}
 
-        {/* Mobile Number Input Section */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Contact Mobile Number</Text>
+          <Text style={styles.sectionTitle}>Contact Details</Text>
           <Text style={styles.sectionSub}>We will send updates and booking confirmation here.</Text>
 
           <View style={styles.phoneInputWrapper}>
@@ -156,18 +154,32 @@ export default function Step3LocationScreen() {
             </View>
             <TextInput
               style={styles.phoneInput}
-              placeholder="Enter 10-digit number"
+              placeholder="Primary phone (10-digit)*"
               placeholderTextColor="#9CA3AF"
               keyboardType="number-pad"
               maxLength={10}
-              value={phone}
-              onChangeText={setPhone}
+              value={primaryPhone}
+              onChangeText={setPrimaryPhone}
+            />
+          </View>
+
+          <View style={[styles.phoneInputWrapper, { marginTop: 10 }]}>
+            <View style={styles.countryCode}>
+              <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
+            </View>
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="Alternative phone (optional)"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="number-pad"
+              maxLength={10}
+              value={altPhone}
+              onChangeText={setAltPhone}
             />
           </View>
         </View>
       </ScrollView>
 
-      {/* Bottom Footer Button */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.continueBtn} activeOpacity={0.8} onPress={handleContinue}>
           <Text style={styles.btnText}>View Summary & Pay</Text>
@@ -180,7 +192,6 @@ export default function Step3LocationScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120 },
-
   sectionContainer: { marginBottom: 20 },
   sectionTitle: {
     fontSize: 16,
@@ -193,7 +204,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary || "#6B7280",
     marginBottom: 12,
   },
-
   toggleWrapper: {
     flexDirection: "row",
     backgroundColor: "#F3F4F6",
@@ -224,7 +234,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary || "#6B7280",
   },
   toggleTextActive: { color: "#FFF" },
-
   walkinCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -247,7 +256,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 18,
   },
-
   phoneInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -277,7 +285,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.text || "#111827",
   },
-
   footer: {
     position: "absolute",
     bottom: 0,

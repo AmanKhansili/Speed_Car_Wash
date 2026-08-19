@@ -1,11 +1,6 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  LocalUserData,
-  UserLocation,
-  Vehicle,
-  NewVehicle,
-} from "@/types/user";
+import { LocalUserData, NewVehicle, UserLocation, Vehicle } from "@/types/user";
 import { supabase } from "@/utils/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SupabaseClient } from "@supabase/supabase-js";
 
 const USER_DATA_KEY = "@app_user_local_data";
@@ -48,9 +43,7 @@ export const getLocalUserData = async (): Promise<LocalUserData> => {
   }
 };
 
-const saveLocalUserData = async (
-  data: LocalUserData
-): Promise<LocalUserData> => {
+const saveLocalUserData = async (data: LocalUserData): Promise<LocalUserData> => {
   try {
     await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(data));
     return data;
@@ -92,7 +85,7 @@ export const saveVehicleLocally = async (vehicle: Vehicle): Promise<LocalUserDat
 export const addVehicleWithSync = async (
   vehicle: NewVehicle,
   clerkUserId: string,
-  client: SupabaseClient
+  client: SupabaseClient,
 ): Promise<{ vehicle: Vehicle; userData: LocalUserData }> => {
   if (!clerkUserId) throw new Error("User is not authenticated. Please log in.");
 
@@ -107,7 +100,7 @@ export const addVehicleWithSync = async (
   const { data: insertedRow, error } = await client
     .from("vehicles")
     .insert(dbPayload)
-    .select("*")
+    .select("id, make, model, registration_number, vehicle_type, created_at")
     .single();
 
   if (error || !insertedRow) {
@@ -120,7 +113,8 @@ export const addVehicleWithSync = async (
     brand: insertedRow.make || vehicle.brand,
     model: insertedRow.model || vehicle.model,
     category: insertedRow.vehicle_type || vehicle.category,
-    registrationNumber: insertedRow.registration_number || vehicle.registrationNumber || "",
+    registrationNumber: insertedRow.registration_number || "NOT SPECIFIED",
+    created_at: insertedRow.created_at,
   };
 
   const updatedUserData = await saveVehicleLocally(fullVehicle);
@@ -130,7 +124,7 @@ export const addVehicleWithSync = async (
 export const removeVehicleLocally = async (
   vehicleId: string,
   syncWithSupabase: boolean = true,
-  client?: SupabaseClient
+  client?: SupabaseClient,
 ): Promise<LocalUserData> => {
   if (syncWithSupabase) {
     try {
@@ -141,7 +135,7 @@ export const removeVehicleLocally = async (
   }
 
   const currentData = await getLocalUserData();
-  const updatedVehicles = currentData.vehicles.filter((v) => v.id !== vehicleId);
+  const updatedVehicles = currentData.vehicles.filter((vehicle) => vehicle.id !== vehicleId);
   const isSelected = currentData.selectedVehicleId === vehicleId;
   const newSelectedId = isSelected
     ? updatedVehicles.length > 0
@@ -159,9 +153,11 @@ export const removeVehicleLocally = async (
 
 export const setSelectedVehicleLocally = async (vehicleId: string): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
-  const vehicleExists = currentData.vehicles.some((v) => v.id === vehicleId);
+  const vehicleExists = currentData.vehicles.some((vehicle) => vehicle.id === vehicleId);
 
-  if (!vehicleExists) return currentData;
+  if (!vehicleExists) {
+    return currentData;
+  }
 
   return saveLocalUserData({
     ...currentData,
@@ -172,11 +168,7 @@ export const setSelectedVehicleLocally = async (vehicleId: string): Promise<Loca
 
 export const clearLocalUserData = async (): Promise<void> => {
   try {
-    await AsyncStorage.multiRemove([
-      USER_DATA_KEY,
-      PROFILE_CACHE_KEY,
-      STATS_CACHE_KEY,
-    ]);
+    await AsyncStorage.multiRemove([USER_DATA_KEY, PROFILE_CACHE_KEY, STATS_CACHE_KEY]);
   } catch (error) {
     console.error("[UserStorage] Error clearing local user data:", error);
   }
@@ -219,17 +211,3 @@ export const saveStatsCache = async (stats: CachedUserStats): Promise<void> => {
     console.error("[UserStorage] Error saving stats cache:", error);
   }
 };
-
-export const overwriteVehiclesLocally = async (
-  vehicles: Vehicle[],
-  selectedVehicleId: string | null
-): Promise<LocalUserData> => {
-  const currentData = await getLocalUserData();
-  return saveLocalUserData({
-    ...currentData,
-    vehicles,
-    selectedVehicleId,
-    lastUpdated: Date.now(),
-  });
-};
-
