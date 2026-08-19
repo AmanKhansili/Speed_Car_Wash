@@ -1,20 +1,20 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  FlatList,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
 import Colors from "@/constants/colors";
 import { INDIAN_CAR_DATA } from "@/constants/indianCars";
 import useUser from "@/context/userContext";
+import { useAuth } from "@clerk/expo";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 interface VehicleSelectorProps {
   selectedVehicleId: string;
@@ -25,7 +25,7 @@ const ALL_CAR_MODELS = INDIAN_CAR_DATA.flatMap((brand) =>
   brand.models.map((model) => ({
     ...model,
     brand: brand.brand,
-  }))
+  })),
 );
 
 const CATEGORIES = ["Hatchback", "Sedan", "Compact SUV", "Full SUV", "Luxury"];
@@ -38,26 +38,22 @@ export default function VehicleSelector({
   const { userData, addVehicle } = useUser();
   const vehicles = userData?.vehicles || [];
 
-  // Modal & Search States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isManualEntry, setIsManualEntry] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Selected or Manual Form State
   const [brandName, setBrandName] = useState("");
   const [modelName, setModelName] = useState("");
   const [category, setCategory] = useState("Hatchback");
   const [regNumber, setRegNumber] = useState("");
 
-  // Search Filter
   const filteredModels = ALL_CAR_MODELS.filter(
     (item) =>
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.brand.toLowerCase().includes(searchQuery.toLowerCase())
+      item.brand.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  // Select Model from List
   const handleSelectFromList = (item: { name: string; brand: string; category: string }) => {
     setModelName(item.name);
     setBrandName(item.brand);
@@ -65,7 +61,6 @@ export default function VehicleSelector({
     setIsManualEntry(false);
   };
 
-  // Reset Modal Form
   const resetForm = () => {
     setModelName("");
     setBrandName("");
@@ -77,7 +72,6 @@ export default function VehicleSelector({
     setIsModalOpen(false);
   };
 
-  // Save Vehicle Handler
   const handleAddVehicle = async () => {
     if (!isSignedIn || !userId) {
       Alert.alert("Authentication Required", "Please sign in to add a new vehicle.");
@@ -92,7 +86,6 @@ export default function VehicleSelector({
     setIsSaving(true);
 
     try {
-      // Supabase Insert via User Context
       const createdVehicle = await addVehicle({
         model: modelName.trim(),
         brand: brandName.trim(),
@@ -114,7 +107,6 @@ export default function VehicleSelector({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.headerRow}>
         <Text style={styles.sectionTitle}>Select Vehicle</Text>
         <TouchableOpacity
@@ -127,27 +119,26 @@ export default function VehicleSelector({
         </TouchableOpacity>
       </View>
 
-      {/* Empty State vs List */}
       {vehicles.length === 0 ? (
-        <View style={styles.emptyCard}>
+        <TouchableOpacity
+          style={styles.emptyCard}
+          activeOpacity={0.8}
+          onPress={() => setIsModalOpen(true)}
+        >
           <Ionicons name="car-outline" size={36} color="#9CA3AF" />
-          <Text style={styles.emptyTitle}>No Vehicle Selected</Text>
+          <Text style={styles.emptyTitle}>No Vehicle Added</Text>
           <Text style={styles.emptySub}>
             Please add your vehicle details to continue with the booking.
           </Text>
-          <TouchableOpacity
-            style={styles.addVehicleMainBtn}
-            onPress={() => setIsModalOpen(true)}
-          >
+          <View style={styles.addVehicleMainBtn}>
             <Text style={styles.addVehicleMainBtnText}>+ Add Your Car</Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+        </TouchableOpacity>
       ) : (
         <View style={styles.listContainer}>
-          {vehicles.map((item: any) => {
+          {vehicles.map((item) => {
             const isSelected = item.id === selectedVehicleId;
-            const regNum = item.registrationNumber || item.registration_number || "NOT SPECIFIED";
-            const carCategory = item.category || item.vehicle_type || "Car";
+            const regNum = item.registrationNumber || "NOT SPECIFIED";
 
             return (
               <TouchableOpacity
@@ -163,14 +154,12 @@ export default function VehicleSelector({
                     color={isSelected ? Colors.primary || "#2563EB" : "#6B7280"}
                   />
                   <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.modelText}>{item.model || item.name}</Text>
+                    <Text style={styles.modelText}>{item.model}</Text>
                     <Text style={styles.brandText}>
-                      {item.brand || "Vehicle"} • <Text style={styles.categoryText}>{carCategory}</Text>
+                      {item.brand} • <Text style={styles.categoryText}>{item.category}</Text>
                     </Text>
                   </View>
-                  <View
-                    style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}
-                  >
+                  <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
                     {isSelected && <View style={styles.radioInner} />}
                   </View>
                 </View>
@@ -186,7 +175,7 @@ export default function VehicleSelector({
         </View>
       )}
 
-      {/* ADD VEHICLE MODAL */}
+      {/* MODAL */}
       <Modal
         visible={isModalOpen}
         animationType="slide"
@@ -195,7 +184,6 @@ export default function VehicleSelector({
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {isManualEntry ? "Enter Custom Car Details" : "Add New Vehicle"}
@@ -205,10 +193,8 @@ export default function VehicleSelector({
               </TouchableOpacity>
             </View>
 
-            {/* TOGGLE BETWEEN SEARCH & MANUAL FORM */}
             {!isManualEntry ? (
               <>
-                {/* Search Box */}
                 <View style={styles.searchBox}>
                   <Ionicons name="search" size={20} color="#9CA3AF" />
                   <TextInput
@@ -225,7 +211,6 @@ export default function VehicleSelector({
                   )}
                 </View>
 
-                {/* Selected Tag Preview */}
                 {modelName ? (
                   <View style={styles.selectedModelTag}>
                     <Text style={styles.selectedModelTagText}>
@@ -234,7 +219,6 @@ export default function VehicleSelector({
                   </View>
                 ) : null}
 
-                {/* Search Results List */}
                 <FlatList
                   data={filteredModels}
                   keyExtractor={(item, index) => `${item.brand}-${item.name}-${index}`}
@@ -264,9 +248,7 @@ export default function VehicleSelector({
                         style={styles.manualSwitchBtn}
                         onPress={() => setIsManualEntry(true)}
                       >
-                        <Text style={styles.manualSwitchBtnText}>
-                          + Enter Car Name Manually
-                        </Text>
+                        <Text style={styles.manualSwitchBtnText}>+ Enter Car Name Manually</Text>
                       </TouchableOpacity>
                     </View>
                   }
@@ -277,11 +259,10 @@ export default function VehicleSelector({
                   onPress={() => setIsManualEntry(true)}
                 >
                   <Ionicons name="create-outline" size={16} color={Colors.primary || "#2563EB"} />
-                  <Text style={styles.manualLinkText}>Can&apos;t find your car? Type manually</Text>
+                  <Text style={styles.manualLinkText}>{"Can't find your car? Type manually"}</Text>
                 </TouchableOpacity>
               </>
             ) : (
-              /* MANUAL INPUT FORM */
               <View style={styles.manualForm}>
                 <TouchableOpacity
                   style={styles.backToSearchBtn}
@@ -314,18 +295,10 @@ export default function VehicleSelector({
                   {CATEGORIES.map((cat) => (
                     <TouchableOpacity
                       key={cat}
-                      style={[
-                        styles.chip,
-                        category === cat && styles.activeChip,
-                      ]}
+                      style={[styles.chip, category === cat && styles.activeChip]}
                       onPress={() => setCategory(cat)}
                     >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          category === cat && styles.activeChipText,
-                        ]}
-                      >
+                      <Text style={[styles.chipText, category === cat && styles.activeChipText]}>
                         {cat}
                       </Text>
                     </TouchableOpacity>
@@ -334,7 +307,6 @@ export default function VehicleSelector({
               </View>
             )}
 
-            {/* Vehicle Reg Number Input */}
             <Text style={[styles.inputLabel, { marginTop: 12 }]}>
               Registration Number (Optional):
             </Text>
@@ -347,7 +319,6 @@ export default function VehicleSelector({
               placeholderTextColor="#9CA3AF"
             />
 
-            {/* Save Button */}
             <TouchableOpacity
               style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
               onPress={handleAddVehicle}
@@ -378,7 +349,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: "700", color: "#111827" },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   addBtnText: { fontSize: 14, fontWeight: "600", color: Colors.primary || "#2563EB" },
-
   emptyCard: {
     marginBottom: 20,
     padding: 24,
@@ -399,7 +369,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   addVehicleMainBtnText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
-
   listContainer: { gap: 10 },
   vehicleCard: {
     padding: 14,
@@ -423,7 +392,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   radioCircleSelected: { borderColor: Colors.primary || "#2563EB" },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary || "#2563EB" },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary || "#2563EB",
+  },
   regBadge: {
     alignSelf: "flex-start",
     marginTop: 8,
@@ -433,7 +407,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   regText: { fontSize: 11, fontWeight: "700", color: "#374151" },
-
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalContent: {
     backgroundColor: "#FFF",
@@ -473,9 +446,13 @@ const styles = StyleSheet.create({
   modelItemActive: { backgroundColor: "#EFF6FF" },
   modelItemText: { fontSize: 14, fontWeight: "600", color: "#111827" },
   modelItemSub: { fontSize: 12, color: "#6B7280" },
-  typeTag: { backgroundColor: "#F1F5F9", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  typeTag: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
   typeTagText: { fontSize: 11, fontWeight: "600", color: "#475569" },
-
   emptySearchContainer: { alignItems: "center", paddingVertical: 14 },
   noResultText: { fontSize: 13, color: "#6B7280", marginBottom: 8 },
   manualSwitchBtn: {
@@ -485,7 +462,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   manualSwitchBtnText: { color: Colors.primary || "#2563EB", fontWeight: "700", fontSize: 12 },
-
   manualLinkBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -494,7 +470,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   manualLinkText: { fontSize: 13, fontWeight: "600", color: Colors.primary || "#2563EB" },
-
   manualForm: { gap: 10, marginBottom: 8 },
   backToSearchBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 },
   backToSearchText: { fontSize: 12, color: "#4B5563", fontWeight: "600" },
@@ -517,13 +492,14 @@ const styles = StyleSheet.create({
     borderColor: "#D1D5DB",
     backgroundColor: "#F9FAFB",
   },
-  activeChip: { backgroundColor: Colors.primary || "#2563EB", borderColor: Colors.primary || "#2563EB" },
+  activeChip: {
+    backgroundColor: Colors.primary || "#2563EB",
+    borderColor: Colors.primary || "#2563EB",
+  },
   chipText: { fontSize: 12, color: "#4B5563", fontWeight: "600" },
   activeChipText: { color: "#FFF" },
-
   selectedModelTag: { backgroundColor: "#DBEAFE", padding: 8, borderRadius: 8, marginBottom: 8 },
   selectedModelTagText: { fontSize: 12, fontWeight: "700", color: "#1E40AF" },
-
   saveBtn: {
     backgroundColor: Colors.primary || "#2563EB",
     paddingVertical: 14,
