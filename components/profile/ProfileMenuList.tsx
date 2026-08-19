@@ -1,8 +1,8 @@
-import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Colors from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import Colors from "@/constants/colors";
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export interface MenuItem {
   id: string;
@@ -32,14 +32,14 @@ const PRIMARY_ITEMS: MenuItem[] = [
     route: "/membership",
     bgColor: "#EEF2FF",
   },
-  {
-    id: "payments",
-    title: "Payment Methods",
-    subtitle: "Cards, UPI & Wallets",
-    icon: "card-outline",
-    route: "/payments",
-    bgColor: "#EEF2FF",
-  },
+  // {
+  //   id: "payments",
+  //   title: "Payment Methods",
+  //   subtitle: "Cards, UPI & Wallets",
+  //   icon: "card-outline",
+  //   route: "/payments",
+  //   bgColor: "#EEF2FF",
+  // },
   // {
   //   id: "vehicles",
   //   title: "My Vehicles",
@@ -92,10 +92,7 @@ interface ProfileMenuListProps {
   onLogoutPress?: () => void;
 }
 
-export default function ProfileMenuList({
-  onItemPress,
-  onLogoutPress,
-}: ProfileMenuListProps) {
+export default function ProfileMenuList({ onItemPress, onLogoutPress }: ProfileMenuListProps) {
   const router = useRouter();
 
   const handlePress = (item: MenuItem) => {
@@ -121,18 +118,10 @@ export default function ProfileMenuList({
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.7}
-            style={[
-              styles.menuItem,
-              index !== PRIMARY_ITEMS.length - 1 && styles.borderBottom,
-            ]}
+            style={[styles.menuItem, index !== PRIMARY_ITEMS.length - 1 && styles.borderBottom]}
             onPress={() => handlePress(item)}
           >
-            <View
-              style={[
-                styles.iconBadge,
-                { backgroundColor: item.bgColor || "#EEF2FF" },
-              ]}
-            >
+            <View style={[styles.iconBadge, { backgroundColor: item.bgColor || "#EEF2FF" }]}>
               <Ionicons
                 name={item.icon}
                 size={18}
@@ -156,18 +145,10 @@ export default function ProfileMenuList({
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.7}
-            style={[
-              styles.menuItem,
-              index !== SECONDARY_ITEMS.length - 1 && styles.borderBottom,
-            ]}
+            style={[styles.menuItem, index !== SECONDARY_ITEMS.length - 1 && styles.borderBottom]}
             onPress={() => handlePress(item)}
           >
-            <View
-              style={[
-                styles.iconBadge,
-                { backgroundColor: item.bgColor || "#F1F5F9" },
-              ]}
-            >
+            <View style={[styles.iconBadge, { backgroundColor: item.bgColor || "#F1F5F9" }]}>
               <Ionicons
                 name={item.icon}
                 size={18}
@@ -176,12 +157,7 @@ export default function ProfileMenuList({
             </View>
 
             <View style={styles.textWrapper}>
-              <Text
-                style={[
-                  styles.menuTitle,
-                  item.isDanger && styles.dangerTitle,
-                ]}
-              >
+              <Text style={[styles.menuTitle, item.isDanger && styles.dangerTitle]}>
                 {item.title}
               </Text>
               <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
