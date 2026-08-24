@@ -22,6 +22,7 @@ import {
   Alert,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -40,6 +41,7 @@ const TIER_DISPLAY: Record<string, "Gold Member" | "Premium Member"> = {
 };
 
 interface SupabaseProfile {
+  name?: string | null;
   phone: string | null;
   created_at: string;
   membership_tier?: string | null;
@@ -54,8 +56,7 @@ export default function ProfileScreen() {
   const isLoaded = isUserLoaded && isAuthLoaded;
   const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
-  const [supabaseProfile, setSupabaseProfile] =
-    useState<SupabaseProfile | null>(null);
+  const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalBookings: 0,
@@ -65,7 +66,7 @@ export default function ProfileScreen() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Edit Profile Modal States
+  // Edit Profile Modal
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [firstNameInput, setFirstNameInput] = useState("");
   const [lastNameInput, setLastNameInput] = useState("");
@@ -81,6 +82,8 @@ export default function ProfileScreen() {
       ""
     );
   }, [supabaseProfile, user]);
+  // Settings Modal
+  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
 
   const fetchUserData = useCallback(
     async (forceRefresh = false) => {
@@ -90,14 +93,13 @@ export default function ProfileScreen() {
       }
 
       try {
-        // 1. Instant Local Cache Fetch
         const cachedProfile = await getCachedProfileData();
         const cachedStats = await getCachedStatsData();
 
         if (cachedProfile) setSupabaseProfile(cachedProfile);
         if (cachedStats) setStats(cachedStats);
 
-        if (!cachedProfile || !cachedStats) {
+        if (forceRefresh && (!cachedProfile || !cachedStats)) {
           setIsLoading(true);
         } else {
           setIsLoading(false);
@@ -150,9 +152,7 @@ export default function ProfileScreen() {
           // Record genuinely missing (confirmed by profileErr being null
           // above) -> safe to create it for the first time.
           const clerkPhone =
-            user?.primaryPhoneNumber?.phoneNumber ||
-            user?.phoneNumbers?.[0]?.phoneNumber ||
-            null;
+            user?.primaryPhoneNumber?.phoneNumber || user?.phoneNumbers?.[0]?.phoneNumber || null;
 
           const { data: newProfile, error: insertErr } = await db
             .from("profiles")
@@ -203,18 +203,16 @@ export default function ProfileScreen() {
             (b: any) =>
               b.status === "Saved" ||
               b.status === "Saved_Template" ||
-              b.status?.toLowerCase() === "saved"
+              b.status?.toLowerCase() === "saved",
           );
           setSavedCards(quickCards);
 
           const completed = bookingsData.filter(
-            (b: any) => b.status?.toLowerCase() === "completed"
+            (b: any) => b.status?.toLowerCase() === "completed",
           ).length;
 
           const upcoming = bookingsData.filter((b: any) =>
-            ["confirmed", "pending", "upcoming"].includes(
-              b.status?.toLowerCase()
-            )
+            ["confirmed", "pending", "upcoming"].includes(b.status?.toLowerCase()),
           ).length;
 
           const freshStats = {
@@ -233,19 +231,19 @@ export default function ProfileScreen() {
         setIsLoading(false);
       }
     },
-    [userId, db, user]
+    [userId, db, user],
   );
 
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
       if (isLoaded && userId && isMounted) {
-        fetchUserData(true);
+        fetchUserData(false);
       }
       return () => {
         isMounted = false;
       };
-    }, [userId, isLoaded, fetchUserData])
+    }, [userId, isLoaded, fetchUserData]),
   );
 
   const handleOpenEditModal = () => {
@@ -271,23 +269,25 @@ export default function ProfileScreen() {
         lastName: lastNameInput.trim(),
       });
 
-      // 2. Explicitly Update Phone in Supabase
+      // 2. Supabase update (Mapped strictly to 'name' and 'phone' column)
+      const combinedFullName = `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
       const formattedPhone = phoneInput.trim();
-      const fullName = `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
 
       const { error } = await db.from("profiles").upsert(
         {
           clerk_user_id: user.id,
-          name: fullName,
+          name: combinedFullName,
+          email: user.primaryEmailAddress?.emailAddress || null,
           phone: formattedPhone,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "clerk_user_id" }
+        { onConflict: "clerk_user_id" },
       );
 
       if (error) throw error;
 
       const updatedProfile: SupabaseProfile = {
+        name: combinedFullName,
         created_at: supabaseProfile?.created_at || new Date().toISOString(),
         phone: formattedPhone,
         membership_tier: supabaseProfile?.membership_tier,
@@ -303,6 +303,42 @@ export default function ProfileScreen() {
     } finally {
       setIsSavingProfile(false);
     }
+  };
+
+  const handleDeleteSavedCard = async (cardId: string) => {
+    setSavedCards((prev) => prev.filter((c) => c.id !== cardId));
+    setStats((prev) => ({
+      ...prev,
+      totalBookings: Math.max(0, prev.totalBookings - 1),
+      savedServices: Math.max(0, prev.savedServices - 1),
+    }));
+
+    const { error } = await db.from("bookings").delete().eq("id", cardId);
+    if (error) {
+      fetchUserData(false);
+      throw error;
+    }
+  };
+
+  const handleHelpAndSupport = () => {
+    Alert.alert("Help & Support", "How would you like to get assistance?", [
+      {
+        text: "Call Support",
+        onPress: () => Linking.openURL("tel:+919876543210"),
+      },
+      {
+        text: "WhatsApp Us",
+        onPress: () =>
+          Linking.openURL(
+            "whatsapp://send?phone=+919876543210&text=Hi,%20I%20need%20assistance%20with%20my%20car%20wash%20booking.",
+          ).catch(() => Alert.alert("Error", "WhatsApp is not installed on your device.")),
+      },
+      {
+        text: "Email Support",
+        onPress: () => Linking.openURL("mailto:support@speedcarwash.com"),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const handleLogout = async () => {
@@ -340,44 +376,35 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitle}>My Profile</Text>
         <TouchableOpacity
           style={styles.settingsBtn}
-          onPress={() => router.push("/settings" as any)}
+          onPress={() => setIsSettingsModalVisible(true)}
         >
-          <Ionicons
-            name="settings-outline"
-            size={22}
-            color={Colors.text || "#0F172A"}
-          />
+          <Ionicons name="settings-outline" size={22} color={Colors.text || "#0F172A"} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <UserInfoCard
           phone={activePhoneNumber}
           onEditPress={handleOpenEditModal}
           onAddPhone={handleOpenEditModal}
           onAddEmail={() =>
-            Alert.alert(
-              "Email Address",
-              "Email is managed securely via account settings."
-            )
+            Alert.alert("Email Address", "Email is managed securely via account settings.")
           }
         />
 
-        {supabaseProfile?.membership_tier &&
-          supabaseProfile.membership_tier !== "standard" && (
-            <MembershipBanner
-              memberSince="New Member"
-              tier={TIER_DISPLAY[supabaseProfile.membership_tier]}
-              onPressBanner={() => router.push("/membership/status" as any)}
-            />
-          )}
+        {supabaseProfile?.membership_tier && supabaseProfile.membership_tier !== "standard" && (
+          <MembershipBanner
+            memberSince="New Member"
+            tier={TIER_DISPLAY[supabaseProfile.membership_tier]}
+            onPressBanner={() => router.push("/membership/status" as any)}
+          />
+        )}
 
+        {/* Quick Actions */}
         <MyVehiclesSection
           savedCards={savedCards}
           onAddCarPress={() => router.push("/booking/step1-selection" as any)}
+          onDeleteCard={handleDeleteSavedCard}
         />
 
         <ProfileStats
@@ -470,6 +497,77 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Settings Modal */}
+      <Modal
+        visible={isSettingsModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsSettingsModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsSettingsModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.settingsHeader}>
+              <Text style={styles.modalTitle}>Settings</Text>
+              <TouchableOpacity onPress={() => setIsSettingsModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                setIsSettingsModalVisible(false);
+                handleOpenEditModal();
+              }}
+            >
+              <Ionicons name="person-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Text style={styles.settingItemText}>Account Details</Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                setIsSettingsModalVisible(false);
+                router.push("/membership" as any);
+              }}
+            >
+              <Ionicons name="ribbon-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Text style={styles.settingItemText}>Membership & Plans</Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => {
+                setIsSettingsModalVisible(false);
+                handleHelpAndSupport();
+              }}
+            >
+              <Ionicons name="headset-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Text style={styles.settingItemText}>Help & Support</Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.settingItem, { borderBottomWidth: 0 }]}
+              onPress={() => {
+                setIsSettingsModalVisible(false);
+                handleLogout();
+              }}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+              <Text style={[styles.settingItemText, { color: "#EF4444" }]}>Log Out</Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -508,11 +606,30 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: Platform.OS === "ios" ? 36 : 24,
   },
+  settingsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: Colors.text || "#0F172A",
-    marginBottom: 16,
+  },
+  settingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    gap: 12,
+  },
+  settingItemText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#334155",
+    flex: 1,
   },
   inputLabel: {
     fontSize: 13,

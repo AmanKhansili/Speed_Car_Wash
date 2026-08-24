@@ -1,14 +1,18 @@
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  FlatList,
   Image,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -21,10 +25,11 @@ import MembershipBanner from "@/components/home/MembershipBanner";
 import ServicesGrid from "@/components/home/ServicesGrid";
 import QuickActions from "@/components/home/QuickActions";
 import { useBookingStore } from "@/store/bookingStore";
-import * as Location from "expo-location";
-import { useRouter } from "expo-router";
+import { supabase } from "@/utils/supabase";
 import { useUser } from "@clerk/expo";
 import NotificationBell from "@/components/home/notificationbell";
+import * as Location from "expo-location";
+import { useFocusEffect, useRouter } from "expo-router";
 
 const POPULAR_SERVICES = [
   {
@@ -69,13 +74,63 @@ const POPULAR_SERVICES = [
   },
 ];
 
+export interface DisplayReview {
+  id: string;
+  name: string;
+  rating: number;
+  review: string;
+  serviceName?: string;
+  date?: string;
+}
+
 export default function HomeScreen() {
   const [address, setAddress] = useState("Fetching location...");
+  const [reviewsList, setReviewsList] = useState<DisplayReview[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [isAllReviewsModalOpen, setIsAllReviewsModalOpen] = useState(false);
   const router = useRouter();
 
 
   const { user } = useUser();
   const { addService } = useBookingStore();
+
+  const isFetchingRef = useRef(false);
+
+  const fetchLiveReviews = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
+    try {
+      setLoadingReviews(true);
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("id, rating, comment, user_name, service_name, created_at")
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const mappedReviews: DisplayReview[] = data.map((item: any) => ({
+          id: item.id,
+          name: item.user_name || "Verified Customer",
+          rating: Number(item.rating) || 5,
+          review: item.comment || "Service was prompt, clean, and top quality!",
+          serviceName: item.service_name || "Car Wash",
+          date: item.created_at ? new Date(item.created_at).toLocaleDateString() : "",
+        }));
+        setReviewsList(mappedReviews);
+      }
+    } catch (err) {
+      console.log("❌ [Reviews] Fetch Error:", err);
+    } finally {
+      setLoadingReviews(false);
+      isFetchingRef.current = false;
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchLiveReviews();
+    }, [fetchLiveReviews]),
+  );
 
   useEffect(() => {
     (async () => {
@@ -109,10 +164,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* HEADER */}
         <View style={styles.header}>
           <View>
@@ -126,11 +178,10 @@ export default function HomeScreen() {
           <View style={styles.locationContainer}>
             <View>
               <Text style={styles.locationLabel}>
-                <Ionicons name="location" size={11} color="#EF4444" />
-                Current Location
+                <Ionicons name="location" size={11} color="#EF4444" /> Current Location
               </Text>
               <Text style={styles.locationText}>
-                {address}
+                {address}{" "}
                 <Ionicons
                   name="chevron-down"
                   size={12}
@@ -144,18 +195,15 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.notificationBtn}>
 
             <NotificationBell count={0} />
+            <Ionicons name="notifications-outline" size={22} color={Colors.text} />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
         </View>
 
         {/* GREETING */}
         <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>
-            Hello, {user?.firstName || "Guest"} 👋
-          </Text>
-          <Text style={styles.greetingSub}>
-            Keep your car clean, Keep your ride fresh
-          </Text>
+          <Text style={styles.greetingTitle}>Hello, {user?.firstName || "Guest"} 👋</Text>
+          <Text style={styles.greetingSub}>Keep your car clean, Keep your ride fresh</Text>
         </View>
 
         <HeroBanner />
@@ -163,36 +211,30 @@ export default function HomeScreen() {
         <QuickActions />
 
         {/* POPULAR SERVICES */}
-        <SectionTitle
-          title="Popular Services"
-          onPress={() => router.push("/services")}
-        />
+        <SectionTitle title="Popular Services" onPress={() => router.push("/services")} />
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.horizontalScroll}
         >
-          {/* 🚀 Dynamic Map Logic for Popular Services */}
           {POPULAR_SERVICES.map((item) => (
             <ServiceCard
               key={item.id}
               title={item.title}
               subtitle={item.subtitle}
-              price={`₹${item.price}`} // String format for UI
+              price={`₹${item.price}`}
               rating={item.rating}
               reviews={item.reviews}
               tag={item.tag}
               image={item.image}
               style={{ marginRight: 16 }}
               onAddPress={() => {
-                // 1. Service ko cart/store mein add karo
                 addService({
                   id: item.id,
                   title: item.title,
                   price: item.price,
                 });
-                // 2. Direct Booking page par bhej do
                 router.push("/booking/step1-selection" as any);
               }}
             />
@@ -203,28 +245,104 @@ export default function HomeScreen() {
         <MembershipBanner />
 
         {/* CUSTOMER REVIEWS */}
-        <SectionTitle
-          title="Customer Reviews"
-          onPress={() => router.push("/services")}
-        />
+        <SectionTitle title="Customer Reviews" onPress={() => setIsAllReviewsModalOpen(true)} />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.horizontalScroll}
-        >
-          <ReviewCard
-            name="Aman"
-            rating={5}
-            review="Excellent service. My car looks brand new. Highly recommended!"
-          />
-          <ReviewCard
-            name="Amit"
-            rating={4}
-            review="Very professional detailers. They arrived exactly on time."
-          />
-        </ScrollView>
+        {loadingReviews && reviewsList.length === 0 ? (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="small" color={Colors.primary || "#2563EB"} />
+          </View>
+        ) : reviewsList.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalScroll}
+          >
+            {reviewsList.slice(0, 5).map((item) => (
+              <ReviewCard
+                key={item.id}
+                name={item.name}
+                rating={item.rating}
+                review={item.review}
+                serviceName={item.serviceName}
+              />
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyReviewBox}>
+            <Ionicons name="chatbubbles-outline" size={24} color="#94A3B8" />
+            <Text style={styles.emptyReviewText}>
+              No customer reviews yet. Book a service and be the first to review!
+            </Text>
+          </View>
+        )}
       </ScrollView>
+
+      {/* ALL REVIEWS FULL MODAL */}
+      <Modal
+        visible={isAllReviewsModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsAllReviewsModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsAllReviewsModalOpen(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>All Customer Reviews</Text>
+                  <Text style={styles.modalSub}>{reviewsList.length} verified ratings</Text>
+                </View>
+                <TouchableOpacity onPress={() => setIsAllReviewsModalOpen(false)}>
+                  <Ionicons name="close-circle" size={26} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              {reviewsList.length === 0 ? (
+                <View style={{ padding: 40, alignItems: "center" }}>
+                  <Text style={{ color: "#64748B" }}>No reviews available.</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={reviewsList}
+                  keyExtractor={(item) => item.id}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  renderItem={({ item }) => (
+                    <View style={styles.modalReviewCard}>
+                      <View style={styles.reviewCardHeader}>
+                        <View style={styles.avatarCircle}>
+                          <Ionicons name="person" size={18} color="#64748B" />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={styles.reviewerName}>{item.name}</Text>
+                          <Text style={styles.serviceTag}>
+                            {item.serviceName} • {item.date}
+                          </Text>
+                        </View>
+                        <View style={styles.starRow}>
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Ionicons
+                              key={i}
+                              name="star"
+                              size={12}
+                              color={i < item.rating ? "#F59E0B" : "#CBD5E1"}
+                            />
+                          ))}
+                        </View>
+                      </View>
+                      <Text style={styles.reviewBody}>{item.review}</Text>
+                    </View>
+                  )}
+                />
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -273,4 +391,70 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
+  centerBox: {
+    paddingVertical: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyReviewBox: {
+    marginHorizontal: 16,
+    padding: 20,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    gap: 6,
+  },
+  emptyReviewText: {
+    fontSize: 13,
+    color: "#64748B",
+    textAlign: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "85%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  modalTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
+  modalSub: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  modalReviewCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  reviewCardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  avatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewerName: { fontSize: 14, fontWeight: "700", color: "#0F172A" },
+  serviceTag: { fontSize: 11, color: "#64748B", marginTop: 2 },
+  starRow: { flexDirection: "row", gap: 2 },
+  reviewBody: { fontSize: 13, color: "#334155", lineHeight: 18 },
 });

@@ -45,9 +45,7 @@ export const getLocalUserData = async (): Promise<LocalUserData> => {
   }
 };
 
-const saveLocalUserData = async (
-  data: LocalUserData
-): Promise<LocalUserData> => {
+const saveLocalUserData = async (data: LocalUserData): Promise<LocalUserData> => {
   try {
     await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(data));
     return data;
@@ -57,9 +55,7 @@ const saveLocalUserData = async (
   }
 };
 
-export const savePhoneLocally = async (
-  mobileNumber: string
-): Promise<LocalUserData> => {
+export const savePhoneLocally = async (mobileNumber: string): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
   return saveLocalUserData({
     ...currentData,
@@ -68,9 +64,7 @@ export const savePhoneLocally = async (
   });
 };
 
-export const saveLocationLocally = async (
-  location: UserLocation
-): Promise<LocalUserData> => {
+export const saveLocationLocally = async (location: UserLocation): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
   return saveLocalUserData({
     ...currentData,
@@ -79,13 +73,9 @@ export const saveLocationLocally = async (
   });
 };
 
-export const saveVehicleLocally = async (
-  vehicle: Vehicle
-): Promise<LocalUserData> => {
+export const saveVehicleLocally = async (vehicle: Vehicle): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
-  const existingIndex = currentData.vehicles.findIndex(
-    (v) => v.id === vehicle.id
-  );
+  const existingIndex = currentData.vehicles.findIndex((v) => v.id === vehicle.id);
   const updatedVehicles = [...currentData.vehicles];
 
   if (existingIndex >= 0) {
@@ -102,13 +92,27 @@ export const saveVehicleLocally = async (
   });
 };
 
+export const overwriteVehiclesLocally = async (
+  vehicles: Vehicle[],
+  selectedVehicleId: string | null = null,
+): Promise<LocalUserData> => {
+  const currentData = await getLocalUserData();
+  const targetSelectedId = selectedVehicleId || (vehicles.length > 0 ? vehicles[0].id : null);
+
+  return saveLocalUserData({
+    ...currentData,
+    vehicles,
+    selectedVehicleId: targetSelectedId,
+    lastUpdated: Date.now(),
+  });
+};
+
 export const addVehicleWithSync = async (
   vehicle: NewVehicle,
   clerkUserId: string,
-  client: SupabaseClient
+  client: SupabaseClient,
 ): Promise<{ vehicle: Vehicle; userData: LocalUserData }> => {
-  if (!clerkUserId)
-    throw new Error("User is not authenticated. Please log in.");
+  if (!clerkUserId) throw new Error("User is not authenticated. Please log in.");
 
   const dbPayload = {
     clerk_user_id: clerkUserId,
@@ -126,9 +130,7 @@ export const addVehicleWithSync = async (
 
   if (error || !insertedRow) {
     console.error("[UserStorage] Supabase insert failed:", error);
-    throw new Error(
-      error?.message || "Could not save vehicle to remote database."
-    );
+    throw new Error(error?.message || "Could not save vehicle to remote database.");
   }
 
   const fullVehicle: Vehicle = {
@@ -147,7 +149,7 @@ export const addVehicleWithSync = async (
 export const removeVehicleLocally = async (
   vehicleId: string,
   syncWithSupabase: boolean = true,
-  client?: SupabaseClient
+  client?: SupabaseClient,
 ): Promise<LocalUserData> => {
   if (syncWithSupabase) {
     try {
@@ -158,9 +160,7 @@ export const removeVehicleLocally = async (
   }
 
   const currentData = await getLocalUserData();
-  const updatedVehicles = currentData.vehicles.filter(
-    (vehicle) => vehicle.id !== vehicleId
-  );
+  const updatedVehicles = currentData.vehicles.filter((vehicle) => vehicle.id !== vehicleId);
   const isSelected = currentData.selectedVehicleId === vehicleId;
   const newSelectedId = isSelected
     ? updatedVehicles.length > 0
@@ -176,13 +176,9 @@ export const removeVehicleLocally = async (
   });
 };
 
-export const setSelectedVehicleLocally = async (
-  vehicleId: string
-): Promise<LocalUserData> => {
+export const setSelectedVehicleLocally = async (vehicleId: string): Promise<LocalUserData> => {
   const currentData = await getLocalUserData();
-  const vehicleExists = currentData.vehicles.some(
-    (vehicle) => vehicle.id === vehicleId
-  );
+  const vehicleExists = currentData.vehicles.some((vehicle) => vehicle.id === vehicleId);
 
   if (!vehicleExists) {
     return currentData;
@@ -212,19 +208,16 @@ export const clearLocalUserData = async (): Promise<void> => {
  * PROFILE, STATS & VEHICLES CACHING HELPERS
  * ==================================================================== */
 
-export const getCachedProfileData =
-  async (): Promise<CachedProfileData | null> => {
-    try {
-      const jsonValue = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
-      return jsonValue ? JSON.parse(jsonValue) : null;
-    } catch (error) {
-      return null;
-    }
-  };
+export const getCachedProfileData = async (): Promise<CachedProfileData | null> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+    return jsonValue ? JSON.parse(jsonValue) : null;
+  } catch (error) {
+    return null;
+  }
+};
 
-export const saveProfileCache = async (
-  profile: CachedProfileData
-): Promise<void> => {
+export const saveProfileCache = async (profile: CachedProfileData): Promise<void> => {
   try {
     await AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
   } catch (error) {
@@ -246,40 +239,5 @@ export const saveStatsCache = async (stats: CachedUserStats): Promise<void> => {
     await AsyncStorage.setItem(STATS_CACHE_KEY, JSON.stringify(stats));
   } catch (error) {
     console.error("[UserStorage] Error saving stats cache:", error);
-  }
-};
-
-// 🚀 Fixed: Accepts second optional parameter `selectedVehicleId`
-export const overwriteVehiclesLocally = async (
-  vehicles: Vehicle[],
-  selectedVehicleId?: string | null
-): Promise<LocalUserData> => {
-  const currentData = await getLocalUserData();
-  return saveLocalUserData({
-    ...currentData,
-    vehicles,
-    selectedVehicleId:
-      selectedVehicleId !== undefined
-        ? selectedVehicleId
-        : currentData.selectedVehicleId,
-    lastUpdated: Date.now(),
-  });
-};
-
-export const getCachedVehiclesData = async (): Promise<Vehicle[] | null> => {
-  try {
-    const data = await AsyncStorage.getItem(VEHICLES_CACHE_KEY);
-    return data ? JSON.parse(data) : null;
-  } catch (error) {
-    console.error("Error reading vehicles cache:", error);
-    return null;
-  }
-};
-
-export const saveVehiclesCache = async (vehicles: Vehicle[]): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(VEHICLES_CACHE_KEY, JSON.stringify(vehicles));
-  } catch (error) {
-    console.error("Error saving vehicles cache:", error);
   }
 };
