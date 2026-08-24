@@ -66,12 +66,15 @@ export default function ProfileScreen() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Edit Profile Modal
+  // Edit Profile Modal States
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [firstNameInput, setFirstNameInput] = useState("");
   const [lastNameInput, setLastNameInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Settings Modal State
+  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
 
   // Active Phone Fallback Priority: DB Phone -> Clerk Primary -> Clerk List -> Empty
   const activePhoneNumber = useMemo(() => {
@@ -82,8 +85,6 @@ export default function ProfileScreen() {
       ""
     );
   }, [supabaseProfile, user]);
-  // Settings Modal
-  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
 
   const fetchUserData = useCallback(
     async (forceRefresh = false) => {
@@ -93,13 +94,14 @@ export default function ProfileScreen() {
       }
 
       try {
+        // 1. Instant Local Cache Fetch
         const cachedProfile = await getCachedProfileData();
         const cachedStats = await getCachedStatsData();
 
         if (cachedProfile) setSupabaseProfile(cachedProfile);
         if (cachedStats) setStats(cachedStats);
 
-        if (forceRefresh && (!cachedProfile || !cachedStats)) {
+        if (!cachedProfile || !cachedStats) {
           setIsLoading(true);
         } else {
           setIsLoading(false);
@@ -110,23 +112,13 @@ export default function ProfileScreen() {
         }
 
         // 2. Fetch Profile safely without overwriting existing DB data
-        // IMPORTANT: match on clerk_user_id ONLY — this is the same column
-        // handleSaveProfile upserts on (onConflict: "clerk_user_id"). Mixing
-        // in `.or(id.eq.userId)` here caused mismatched/duplicate row lookups.
         const { data: profileData, error: profileErr } = await db
           .from("profiles")
-          .select("phone, created_at, membership_tier")
+          .select("name, phone, created_at, membership_tier")
           .eq("clerk_user_id", userId)
           .maybeSingle();
 
         if (profileErr) {
-          // A real DB/RLS/network error is NOT the same as "no profile yet".
-          // Previously this was ignored, which meant a transient error (e.g.
-          // auth token not fully attached right after login) fell through
-          // to the "first time user" branch below and created a *second*,
-          // phone-less profile row — which is why the saved number appeared
-          // to vanish after logout/login. Bail out here instead and let the
-          // next focus/retry pick it up, rather than inserting a duplicate.
           console.error("Error fetching profile:", profileErr);
           setIsLoading(false);
           return;
@@ -141,6 +133,7 @@ export default function ProfileScreen() {
             null;
 
           const formattedProfile = {
+            name: profileData.name,
             phone: finalPhone,
             created_at: profileData.created_at,
             membership_tier: profileData.membership_tier,
@@ -149,8 +142,7 @@ export default function ProfileScreen() {
           setSupabaseProfile(formattedProfile);
           await saveProfileCache(formattedProfile);
         } else {
-          // Record genuinely missing (confirmed by profileErr being null
-          // above) -> safe to create it for the first time.
+          // Record genuinely missing -> safe to create first time
           const clerkPhone =
             user?.primaryPhoneNumber?.phoneNumber || user?.phoneNumbers?.[0]?.phoneNumber || null;
 
@@ -162,15 +154,10 @@ export default function ProfileScreen() {
               phone: clerkPhone,
               updated_at: new Date().toISOString(),
             })
-            .select("phone, created_at, membership_tier")
+            .select("name, phone, created_at, membership_tier")
             .single();
 
           if (insertErr) {
-            // Most likely a duplicate-key error from the unique constraint
-            // on clerk_user_id (a row already exists but the select above
-            // raced with another insert). Don't silently swallow it — just
-            // log and let the user retry via pull-to-refresh/focus instead
-            // of masking the real profile with a blank one.
             console.error("Error creating profile:", insertErr);
             setIsLoading(false);
             return;
@@ -178,6 +165,7 @@ export default function ProfileScreen() {
 
           if (newProfile) {
             const formattedProfile = {
+              name: newProfile.name,
               phone: newProfile.phone,
               created_at: newProfile.created_at,
               membership_tier: newProfile.membership_tier,
@@ -238,7 +226,7 @@ export default function ProfileScreen() {
     useCallback(() => {
       let isMounted = true;
       if (isLoaded && userId && isMounted) {
-        fetchUserData(false);
+        fetchUserData(true);
       }
       return () => {
         isMounted = false;
@@ -269,14 +257,14 @@ export default function ProfileScreen() {
         lastName: lastNameInput.trim(),
       });
 
-      // 2. Supabase update (Mapped strictly to 'name' and 'phone' column)
-      const combinedFullName = `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
+      // 2. Explicitly Update Phone and Name in Supabase
       const formattedPhone = phoneInput.trim();
+      const fullName = `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
 
       const { error } = await db.from("profiles").upsert(
         {
           clerk_user_id: user.id,
-          name: combinedFullName,
+          name: fullName,
           email: user.primaryEmailAddress?.emailAddress || null,
           phone: formattedPhone,
           updated_at: new Date().toISOString(),
@@ -287,7 +275,7 @@ export default function ProfileScreen() {
       if (error) throw error;
 
       const updatedProfile: SupabaseProfile = {
-        name: combinedFullName,
+        name: fullName,
         created_at: supabaseProfile?.created_at || new Date().toISOString(),
         phone: formattedPhone,
         membership_tier: supabaseProfile?.membership_tier,
@@ -400,7 +388,6 @@ export default function ProfileScreen() {
           />
         )}
 
-        {/* Quick Actions */}
         <MyVehiclesSection
           savedCards={savedCards}
           onAddCarPress={() => router.push("/booking/step1-selection" as any)}
@@ -412,8 +399,10 @@ export default function ProfileScreen() {
           completed={stats.completed}
           upcoming={stats.upcoming}
           savedServices={stats.savedServices}
-          onStatPress={() => {
-            router.push("/(tabs)/bookings" as any);
+          onStatPress={(type) => {
+            type === "saved"
+              ? router.push("/saved-services" as any)
+              : router.push("/(tabs)/bookings" as any);
           }}
         />
 

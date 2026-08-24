@@ -39,10 +39,7 @@ export default function MembershipCheckoutScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { openCheckout, RazorpayUI } = useRazorpay();
 
-  const clerkSupabase = useMemo(
-    () => createClerkSupabaseClient(getToken),
-    [getToken],
-  );
+  const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
   // Display-only estimate — actual price/GST/discount is always recalculated server-side
   const estimatedBase = Number(params.amount) || 0;
@@ -53,10 +50,7 @@ export default function MembershipCheckoutScreen() {
       return;
     }
     if (appliedCoupon) {
-      Alert.alert(
-        "Coupon Applied",
-        "A coupon is already applied. Remove it first.",
-      );
+      Alert.alert("Coupon Applied", "A coupon is already applied. Remove it first.");
       return;
     }
     // Just a UI preview flag — server validates the real coupon against its own list
@@ -71,10 +65,7 @@ export default function MembershipCheckoutScreen() {
 
   const handleMembershipPayment = async () => {
     if (!selectedVehicleId) {
-      Alert.alert(
-        "Vehicle Required",
-        "Please select a vehicle for this membership.",
-      );
+      Alert.alert("Vehicle Required", "Please select a vehicle for this membership.");
       return;
     }
     if (!userId) {
@@ -89,17 +80,14 @@ export default function MembershipCheckoutScreen() {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await clerkSupabase.functions.invoke(
-        "create-membership-order",
-        {
-          body: {
-            planId: params.planId,
-            billingCycle: params.billingCycle,
-            couponCode: appliedCoupon || undefined,
-            clerkUserId: userId,
-          },
+      const { data, error } = await clerkSupabase.functions.invoke("create-membership-order", {
+        body: {
+          planId: params.planId,
+          billingCycle: params.billingCycle,
+          couponCode: appliedCoupon || undefined,
+          clerkUserId: userId,
         },
-      );
+      });
 
       if (error || !data?.order?.id || !data?.subscription?.id) {
         throw new Error(error?.message || "Could not create membership order");
@@ -108,12 +96,9 @@ export default function MembershipCheckoutScreen() {
       const { order, subscription, grandTotal } = data;
 
       // 2. Customer prefill data
-      const customerName =
-        clerkUser?.fullName || clerkUser?.firstName || "Valued Customer";
-      const customerEmail =
-        clerkUser?.primaryEmailAddress?.emailAddress || "customer@example.com";
-      const customerPhone =
-        clerkUser?.primaryPhoneNumber?.phoneNumber || "9999999999";
+      const customerName = clerkUser?.fullName || clerkUser?.firstName || "Valued Customer";
+      const customerEmail = clerkUser?.primaryEmailAddress?.emailAddress || "customer@example.com";
+      const customerPhone = clerkUser?.primaryPhoneNumber?.phoneNumber || "9999999999";
 
       const razor = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
 
@@ -140,24 +125,21 @@ export default function MembershipCheckoutScreen() {
           onSuccess: async (result: any) => {
             try {
               // 4. NEVER set status active from the client — verify server-side first
-              const { data: verifyData, error: verifyError } =
-                await clerkSupabase.functions.invoke(
-                  "verify-razorpay-payment",
-                  {
-                    body: {
-                      razorpay_order_id: result.razorpay_order_id ?? order.id,
-                      razorpay_payment_id: result.razorpay_payment_id,
-                      razorpay_signature: result.razorpay_signature,
-                      subscriptionId: subscription.id,
-                      clerkUserId: userId,
-                    },
+              const { data: verifyData, error: verifyError } = await clerkSupabase.functions.invoke(
+                "verify-razorpay-payment",
+                {
+                  body: {
+                    razorpay_order_id: result.razorpay_order_id ?? order.id,
+                    razorpay_payment_id: result.razorpay_payment_id,
+                    razorpay_signature: result.razorpay_signature,
+                    subscriptionId: subscription.id,
+                    clerkUserId: userId,
                   },
-                );
+                },
+              );
 
               if (verifyError || !verifyData?.success) {
-                throw new Error(
-                  verifyError?.message || "Payment verification failed",
-                );
+                throw new Error(verifyError?.message || "Payment verification failed");
               }
 
               Alert.alert(
@@ -191,10 +173,7 @@ export default function MembershipCheckoutScreen() {
               .eq("id", subscription.id);
 
             setIsSubmitting(false);
-            Alert.alert(
-              "Payment Failed",
-              error?.description || "Payment could not be completed.",
-            );
+            Alert.alert("Payment Failed", error?.description || "Payment could not be completed.");
           },
           onClose: () => setIsSubmitting(false),
         },
@@ -210,24 +189,15 @@ export default function MembershipCheckoutScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons
-            name="chevron-back"
-            size={24}
-            color={Colors.text || "#111827"}
-          />
+          <Ionicons name="chevron-back" size={24} color={Colors.text || "#111827"} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Membership Checkout</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.planCard}>
-          <Text style={styles.planBadge}>
-            {params.billingCycle?.toUpperCase()} PLAN
-          </Text>
+          <Text style={styles.planBadge}>{params.billingCycle?.toUpperCase()} PLAN</Text>
           <Text style={styles.planTitle}>{params.planName} Membership</Text>
           <Text style={styles.planPrice}>₹{estimatedBase}</Text>
         </View>
@@ -237,16 +207,11 @@ export default function MembershipCheckoutScreen() {
           {userData?.vehicles && userData.vehicles.length > 0 ? (
             userData.vehicles.map((v: any) => {
               const isSelected = selectedVehicleId === v.id;
-              const vehicleName = v.make
-                ? `${v.make} ${v.model}`
-                : v.model || "Vehicle";
+              const vehicleName = v.make ? `${v.make} ${v.model}` : v.model || "Vehicle";
               return (
                 <TouchableOpacity
                   key={v.id}
-                  style={[
-                    styles.vehicleCard,
-                    isSelected && styles.selectedVehicleCard,
-                  ]}
+                  style={[styles.vehicleCard, isSelected && styles.selectedVehicleCard]}
                   onPress={() => setSelectedVehicleId(v.id)}
                 >
                   <Ionicons
@@ -257,9 +222,7 @@ export default function MembershipCheckoutScreen() {
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.vehicleName}>{vehicleName}</Text>
                     <Text style={styles.vehicleReg}>
-                      {v.registration_number ||
-                        v.registrationNumber ||
-                        "No Reg Number"}
+                      {v.registration_number || v.registrationNumber || "No Reg Number"}
                     </Text>
                   </View>
                   {isSelected && (
@@ -277,9 +240,7 @@ export default function MembershipCheckoutScreen() {
               style={styles.addVehicleBtn}
               onPress={() => router.push("/(tabs)/profile" as any)}
             >
-              <Text style={styles.addVehicleText}>
-                + Add Vehicle in Profile
-              </Text>
+              <Text style={styles.addVehicleText}>+ Add Vehicle in Profile</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -290,11 +251,9 @@ export default function MembershipCheckoutScreen() {
             <TextInput
               style={[
                 styles.couponInput,
-                appliedCoupon
-                  ? { backgroundColor: "#F3F4F6", color: "#6B7280" }
-                  : null,
+                appliedCoupon ? { backgroundColor: "#F3F4F6", color: "#6B7280" } : null,
               ]}
-              placeholder="Enter Coupon (e.g. WELCOME10)"
+              placeholder="Enter Coupon"
               placeholderTextColor="#9CA3AF"
               value={couponCode}
               onChangeText={setCouponCode}
@@ -302,17 +261,11 @@ export default function MembershipCheckoutScreen() {
               editable={!appliedCoupon}
             />
             {appliedCoupon ? (
-              <TouchableOpacity
-                style={styles.removeBtn}
-                onPress={handleRemoveCoupon}
-              >
+              <TouchableOpacity style={styles.removeBtn} onPress={handleRemoveCoupon}>
                 <Text style={styles.removeBtnText}>Remove</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity
-                style={styles.applyBtn}
-                onPress={handleApplyCoupon}
-              >
+              <TouchableOpacity style={styles.applyBtn} onPress={handleApplyCoupon}>
                 <Text style={styles.applyBtnText}>Apply</Text>
               </TouchableOpacity>
             )}
@@ -327,9 +280,7 @@ export default function MembershipCheckoutScreen() {
         <Text style={styles.sectionTitle}>Price Breakdown</Text>
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.infoLabel}>
-              Base Price ({params.billingCycle})
-            </Text>
+            <Text style={styles.infoLabel}>Base Price ({params.billingCycle})</Text>
             <Text style={styles.servicePrice}>₹{estimatedBase}</Text>
           </View>
           <Text style={{ fontSize: 12, color: "#9CA3AF", marginTop: -4 }}>

@@ -22,12 +22,12 @@ import ServiceCard from "@/components/cards/ServiceCard";
 import SectionTitle from "@/components/common/SectionTitle";
 import HeroBanner from "@/components/home/HeroBanner";
 import MembershipBanner from "@/components/home/MembershipBanner";
-import ServicesGrid from "@/components/home/ServicesGrid";
+import NotificationBell from "@/components/home/notificationbell";
 import QuickActions from "@/components/home/QuickActions";
+import ServicesGrid from "@/components/home/ServicesGrid";
 import { useBookingStore } from "@/store/bookingStore";
 import { supabase } from "@/utils/supabase";
 import { useUser } from "@clerk/expo";
-import NotificationBell from "@/components/home/notificationbell";
 import * as Location from "expo-location";
 import { useFocusEffect, useRouter } from "expo-router";
 
@@ -89,7 +89,6 @@ export default function HomeScreen() {
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [isAllReviewsModalOpen, setIsAllReviewsModalOpen] = useState(false);
   const router = useRouter();
-
 
   const { user } = useUser();
   const { addService } = useBookingStore();
@@ -193,10 +192,7 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity style={styles.notificationBtn}>
-
             <NotificationBell count={0} />
-            <Ionicons name="notifications-outline" size={22} color={Colors.text} />
-            <View style={styles.notificationDot} />
           </TouchableOpacity>
         </View>
 
@@ -207,7 +203,7 @@ export default function HomeScreen() {
         </View>
 
         <HeroBanner />
-        <ServicesGrid/>
+        <ServicesGrid />
         <QuickActions />
 
         {/* POPULAR SERVICES */}
