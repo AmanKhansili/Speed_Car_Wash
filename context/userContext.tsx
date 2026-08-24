@@ -1,11 +1,10 @@
 import { LocalUserData, UserLocation, Vehicle, NewVehicle } from "@/types/user";
-import { createClerkSupabaseClient } from "@/utils/supabase"; // ⚠️ apna actual path confirm karo — jahan bhi ye helper defined hai
+import { createClerkSupabaseClient } from "@/utils/supabase";
 import {
   getLocalUserData,
   removeVehicleLocally,
   saveLocationLocally,
   savePhoneLocally,
-  saveVehicleLocally,
   setSelectedVehicleLocally,
   addVehicleWithSync,
   overwriteVehiclesLocally,
@@ -21,7 +20,7 @@ import React, {
   useCallback,
 } from "react";
 
-// 1. Context Type Interface (Added bookings support)
+// 1. Context Type Interface
 interface UserContextType {
   userData: LocalUserData & { bookings?: any[] };
   updatePhone: (phone: string) => Promise<void>;
@@ -42,7 +41,7 @@ interface UserProviderProps {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-// 4. Provider Component
+// 2. Provider Component
 export const UserProvider = ({
   children,
   userId,
@@ -60,7 +59,7 @@ export const UserProvider = ({
   });
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Clerk session token wala Supabase client — memoized, taaki reuse ho
+  // Clerk session token memoized client
   const clerkSupabase = useMemo(() => {
     if (!getToken) return null;
     return createClerkSupabaseClient(getToken);
@@ -87,27 +86,31 @@ export const UserProvider = ({
 
       const currentLocal = await getLocalUserData();
       const stillHasSelected = formattedVehicles.some(
-        (v) => v.id === currentLocal.selectedVehicleId,
+        (v) => v.id === currentLocal.selectedVehicleId
       );
       const newSelectedId = stillHasSelected
         ? currentLocal.selectedVehicleId
         : formattedVehicles[0]?.id || null;
 
-      // AsyncStorage ko hamesha DB ke latest data se overwrite karo — chahe list empty ho jaaye
+      // overwriteVehiclesLocally(vehicles, selectedId) calling
       const updatedLocalData = await overwriteVehiclesLocally(
         formattedVehicles,
-        newSelectedId,
+        newSelectedId
       );
-      setUserData((prev) => ({ ...prev, ...updatedLocalData }));
+
+      setUserData((prev) => ({
+        ...prev,
+        ...updatedLocalData,
+      }));
     } catch (error) {
       console.warn(
         "[UserContext] DB Sync failed, using cached storage:",
-        error,
+        error
       );
     }
   }, [userId, clerkSupabase]);
 
-  // App load par Local Storage se state aur bookings fill karein
+  // App load par Local Storage se state read
   useEffect(() => {
     const initData = async () => {
       const data = await getLocalUserData();
@@ -124,6 +127,7 @@ export const UserProvider = ({
     initData();
   }, []);
 
+  // Sync on userId/Auth availability
   useEffect(() => {
     if (userId && isLoaded && clerkSupabase) {
       syncWithDB();
@@ -142,17 +146,12 @@ export const UserProvider = ({
     await syncWithDB();
   };
 
-  // 🚀 Vehicle add karke DB + local dono sync karta hai
   const addVehicle = async (veh: NewVehicle): Promise<Vehicle> => {
     if (!userId) {
-      throw new Error(
-        "addVehicle: userId is missing, user shayad logged in nahi hai",
-      );
+      throw new Error("addVehicle: userId is missing, user logged in nahi hai");
     }
     if (!clerkSupabase) {
-      throw new Error(
-        "addVehicle: clerkSupabase client ready nahi hai (getToken missing?)",
-      );
+      throw new Error("addVehicle: clerkSupabase client ready nahi hai");
     }
 
     const result = await addVehicleWithSync(veh, userId, clerkSupabase);
@@ -167,21 +166,34 @@ export const UserProvider = ({
   };
 
   const updateVehicle = async (vehicle: Vehicle) => {
-    const updated = await saveVehicleLocally(vehicle);
-    setUserData((prev) => ({ ...prev, ...updated }));
+    if (!userId || !clerkSupabase) return;
+
+    // Supabase DB update
+    const { error } = await clerkSupabase
+      .from("vehicles")
+      .update({
+        make: vehicle.brand,
+        model: vehicle.model,
+        vehicle_type: vehicle.category,
+        registration_number: vehicle.registrationNumber,
+      })
+      .eq("id", vehicle.id)
+      .eq("clerk_user_id", userId);
+
+    if (error) {
+      console.error("[UserContext] Update vehicle failed in DB:", error);
+      throw error;
+    }
+
     await syncWithDB();
   };
 
   const deleteVehicle = async (id: string) => {
     if (!userId) {
-      throw new Error(
-        "deleteVehicle: userId is missing, maybe user is not logged in",
-      );
+      throw new Error("deleteVehicle: userId is missing");
     }
     if (!clerkSupabase) {
-      throw new Error(
-        "deleteVehicle: clerkSupabase client is ready (getToken missing?)",
-      );
+      throw new Error("deleteVehicle: clerkSupabase client ready nahi hai");
     }
 
     const { error } = await clerkSupabase
@@ -195,7 +207,6 @@ export const UserProvider = ({
       throw error;
     }
 
-    // Local AsyncStorage se bhi properly hatao (authenticated client, remote sync dobara nahi — pehle hi delete ho chuka)
     const updated = await removeVehicleLocally(id, false);
     setUserData((prev) => ({ ...prev, ...updated }));
   };
@@ -212,7 +223,6 @@ export const UserProvider = ({
     }
   };
 
-  // 🚀 Bookings update aur save karne ka handler
   const updateBookings = async (newBookings: any[]) => {
     try {
       await AsyncStorage.setItem("user_bookings", JSON.stringify(newBookings));

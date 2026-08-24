@@ -3,12 +3,12 @@ import { useAuth, useUser } from "@clerk/expo";
 import { syncUserToSupabase } from "@/utils/saveUser";
 
 export function useSyncClerkUser() {
-  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+  const { isLoaded: isAuthLoaded, isSignedIn, getToken } = useAuth();
   const { user, isLoaded: isUserLoaded } = useUser();
 
   useEffect(() => {
     if (isAuthLoaded && isUserLoaded && isSignedIn && user) {
-      syncUserToSupabase(user);
+      syncUserToSupabase(user, getToken);
     }
   }, [isAuthLoaded, isUserLoaded, isSignedIn, user]);
 }

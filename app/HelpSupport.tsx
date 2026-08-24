@@ -58,9 +58,9 @@ const FAQ_DATA: FAQItem[] = [
   },
 ];
 
-const SUPPORT_PHONE = "+919876543210"; // TODO: replace with real support number
-const SUPPORT_WHATSAPP = "919876543210"; // no + or spaces, for wa.me links
-const SUPPORT_EMAIL = "support@yourcarwashapp.com"; // TODO: replace with real email
+const SUPPORT_PHONE = "+911876543210";
+const SUPPORT_WHATSAPP = "911876543210";
+const SUPPORT_EMAIL = "support@speedcarwash.com";
 
 export default function HelpSupportScreen() {
   const router = useRouter();

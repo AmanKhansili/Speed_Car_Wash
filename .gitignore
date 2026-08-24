@@ -10,6 +10,7 @@ dist/
 web-build/
 expo-env.d.ts
 
+rule.md
 # Native
 .kotlin/
 *.orig.*

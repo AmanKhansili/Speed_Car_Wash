@@ -55,7 +55,7 @@ export default function MyVehiclesSection({
         <Text style={styles.sectionTitle}>Quick-Book Saved Cards</Text>
         <TouchableOpacity style={styles.addBtn} activeOpacity={0.7} onPress={onAddCarPress}>
           <Ionicons name="add" size={16} color={Colors.primary || "#2563EB"} />
-          <Text style={styles.addBtnText}>Add Car</Text>
+          <Text style={styles.addBtnText}>Add Card</Text>
         </TouchableOpacity>
       </View>
 

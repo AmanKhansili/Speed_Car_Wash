@@ -34,9 +34,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const TIER_DISPLAY: Record<string, "Gold Member" | "Premium Member"> = {
+  gold: "Gold Member",
+  premium: "Premium Member",
+};
+
 interface SupabaseProfile {
   phone: string | null;
   created_at: string;
+  membership_tier?: string | null;
 }
 
 export default function ProfileScreen() {
@@ -48,7 +54,8 @@ export default function ProfileScreen() {
   const isLoaded = isUserLoaded && isAuthLoaded;
   const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
-  const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
+  const [supabaseProfile, setSupabaseProfile] =
+    useState<SupabaseProfile | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalBookings: 0,
@@ -64,6 +71,16 @@ export default function ProfileScreen() {
   const [lastNameInput, setLastNameInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Active Phone Fallback Priority: DB Phone -> Clerk Primary -> Clerk List -> Empty
+  const activePhoneNumber = useMemo(() => {
+    return (
+      supabaseProfile?.phone ||
+      user?.primaryPhoneNumber?.phoneNumber ||
+      user?.phoneNumbers?.[0]?.phoneNumber ||
+      ""
+    );
+  }, [supabaseProfile, user]);
 
   const fetchUserData = useCallback(
     async (forceRefresh = false) => {
@@ -90,44 +107,114 @@ export default function ProfileScreen() {
           return;
         }
 
-        // 2. Fetch Profile from Supabase
-        const { data: profileData } = await db
+        // 2. Fetch Profile safely without overwriting existing DB data
+        // IMPORTANT: match on clerk_user_id ONLY — this is the same column
+        // handleSaveProfile upserts on (onConflict: "clerk_user_id"). Mixing
+        // in `.or(id.eq.userId)` here caused mismatched/duplicate row lookups.
+        const { data: profileData, error: profileErr } = await db
           .from("profiles")
-          .select("phone, created_at")
+          .select("phone, created_at, membership_tier")
           .eq("clerk_user_id", userId)
           .maybeSingle();
 
-        if (profileData) {
-          const formattedProfile = {
-            phone: profileData.phone,
-            created_at: profileData.created_at,
-          };
-          setSupabaseProfile(formattedProfile);
-          await saveProfileCache(formattedProfile);
+        if (profileErr) {
+          // A real DB/RLS/network error is NOT the same as "no profile yet".
+          // Previously this was ignored, which meant a transient error (e.g.
+          // auth token not fully attached right after login) fell through
+          // to the "first time user" branch below and created a *second*,
+          // phone-less profile row — which is why the saved number appeared
+          // to vanish after logout/login. Bail out here instead and let the
+          // next focus/retry pick it up, rather than inserting a duplicate.
+          console.error("Error fetching profile:", profileErr);
+          setIsLoading(false);
+          return;
         }
 
-        // 3. Fetch Bookings (Quick-Cards & Stats)
+        if (profileData) {
+          // DB Record exists: Keep DB phone or fallback to Clerk if empty
+          const finalPhone =
+            profileData.phone ||
+            user?.primaryPhoneNumber?.phoneNumber ||
+            user?.phoneNumbers?.[0]?.phoneNumber ||
+            null;
+
+          const formattedProfile = {
+            phone: finalPhone,
+            created_at: profileData.created_at,
+            membership_tier: profileData.membership_tier,
+          };
+
+          setSupabaseProfile(formattedProfile);
+          await saveProfileCache(formattedProfile);
+        } else {
+          // Record genuinely missing (confirmed by profileErr being null
+          // above) -> safe to create it for the first time.
+          const clerkPhone =
+            user?.primaryPhoneNumber?.phoneNumber ||
+            user?.phoneNumbers?.[0]?.phoneNumber ||
+            null;
+
+          const { data: newProfile, error: insertErr } = await db
+            .from("profiles")
+            .insert({
+              clerk_user_id: userId,
+              name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim(),
+              phone: clerkPhone,
+              updated_at: new Date().toISOString(),
+            })
+            .select("phone, created_at, membership_tier")
+            .single();
+
+          if (insertErr) {
+            // Most likely a duplicate-key error from the unique constraint
+            // on clerk_user_id (a row already exists but the select above
+            // raced with another insert). Don't silently swallow it — just
+            // log and let the user retry via pull-to-refresh/focus instead
+            // of masking the real profile with a blank one.
+            console.error("Error creating profile:", insertErr);
+            setIsLoading(false);
+            return;
+          }
+
+          if (newProfile) {
+            const formattedProfile = {
+              phone: newProfile.phone,
+              created_at: newProfile.created_at,
+              membership_tier: newProfile.membership_tier,
+            };
+            setSupabaseProfile(formattedProfile);
+            await saveProfileCache(formattedProfile);
+          }
+        }
+
+        // 3. Fetch Bookings
         const { data: bookingsData, error: bErr } = await db
           .from("bookings")
           .select("*")
           .or(`clerk_user_id.eq.${userId},user_id.eq.${userId}`)
           .order("created_at", { ascending: false });
 
+        if (bErr) {
+          console.error("Error fetching bookings:", bErr);
+        }
+
         if (!bErr && bookingsData) {
           const quickCards = bookingsData.filter(
             (b: any) =>
               b.status === "Saved" ||
               b.status === "Saved_Template" ||
-              b.status?.toLowerCase() === "saved",
+              b.status?.toLowerCase() === "saved"
           );
           setSavedCards(quickCards);
 
           const completed = bookingsData.filter(
-            (b: any) => b.status?.toLowerCase() === "completed",
+            (b: any) => b.status?.toLowerCase() === "completed"
           ).length;
 
           const upcoming = bookingsData.filter((b: any) =>
-            ["confirmed", "pending", "upcoming"].includes(b.status?.toLowerCase()),
+            ["confirmed", "pending", "upcoming"].includes(
+              b.status?.toLowerCase()
+            )
           ).length;
 
           const freshStats = {
@@ -146,7 +233,7 @@ export default function ProfileScreen() {
         setIsLoading(false);
       }
     },
-    [userId, db],
+    [userId, db, user]
   );
 
   useFocusEffect(
@@ -158,13 +245,13 @@ export default function ProfileScreen() {
       return () => {
         isMounted = false;
       };
-    }, [userId, isLoaded, fetchUserData]),
+    }, [userId, isLoaded, fetchUserData])
   );
 
   const handleOpenEditModal = () => {
     setFirstNameInput(user?.firstName || "");
     setLastNameInput(user?.lastName || "");
-    setPhoneInput(supabaseProfile?.phone || "");
+    setPhoneInput(activePhoneNumber);
     setIsEditModalVisible(true);
   };
 
@@ -178,21 +265,24 @@ export default function ProfileScreen() {
     try {
       setIsSavingProfile(true);
 
-      // 1. Clerk update
+      // 1. Update Name in Clerk
       await user.update({
         firstName: firstNameInput.trim(),
         lastName: lastNameInput.trim(),
       });
 
-      // 2. Supabase update
+      // 2. Explicitly Update Phone in Supabase
       const formattedPhone = phoneInput.trim();
+      const fullName = `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
+
       const { error } = await db.from("profiles").upsert(
         {
           clerk_user_id: user.id,
+          name: fullName,
           phone: formattedPhone,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "clerk_user_id" },
+        { onConflict: "clerk_user_id" }
       );
 
       if (error) throw error;
@@ -200,6 +290,7 @@ export default function ProfileScreen() {
       const updatedProfile: SupabaseProfile = {
         created_at: supabaseProfile?.created_at || new Date().toISOString(),
         phone: formattedPhone,
+        membership_tier: supabaseProfile?.membership_tier,
       };
 
       setSupabaseProfile(updatedProfile);
@@ -251,48 +342,58 @@ export default function ProfileScreen() {
           style={styles.settingsBtn}
           onPress={() => router.push("/settings" as any)}
         >
-          <Ionicons name="settings-outline" size={22} color={Colors.text || "#0F172A"} />
+          <Ionicons
+            name="settings-outline"
+            size={22}
+            color={Colors.text || "#0F172A"}
+          />
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <UserInfoCard
-          phone={supabaseProfile?.phone}
+          phone={activePhoneNumber}
           onEditPress={handleOpenEditModal}
           onAddPhone={handleOpenEditModal}
           onAddEmail={() =>
-            Alert.alert("Email Address", "Email is managed securely via account settings.")
+            Alert.alert(
+              "Email Address",
+              "Email is managed securely via account settings."
+            )
           }
         />
 
-        <MembershipBanner
-          memberSince="New Member"
-          onPressBanner={() => router.push("/membership" as any)}
-        />
+        {supabaseProfile?.membership_tier &&
+          supabaseProfile.membership_tier !== "standard" && (
+            <MembershipBanner
+              memberSince="New Member"
+              tier={TIER_DISPLAY[supabaseProfile.membership_tier]}
+              onPressBanner={() => router.push("/membership/status" as any)}
+            />
+          )}
 
-        {/* Quick Actions (Saved Cards) */}
         <MyVehiclesSection
           savedCards={savedCards}
           onAddCarPress={() => router.push("/booking/step1-selection" as any)}
         />
 
-        {/* Stats */}
         <ProfileStats
           totalBookings={stats.totalBookings}
           completed={stats.completed}
           upcoming={stats.upcoming}
           savedServices={stats.savedServices}
-          onStatPress={(type) => {
-            type === "saved"
-              ? router.push("/saved-services" as any)
-              : router.push("/(tabs)/bookings" as any);
+          onStatPress={() => {
+            router.push("/(tabs)/bookings" as any);
           }}
         />
 
         <ProfileMenuList onLogoutPress={handleLogout} />
       </ScrollView>
 
-      {/* Profile Edit Modal */}
+      {/* Edit Profile Modal */}
       <Modal
         visible={isEditModalVisible}
         animationType="slide"
@@ -387,7 +488,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: Colors.text || "#0F172A" },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: Colors.text || "#0F172A",
+  },
   settingsBtn: { padding: 6 },
   scrollContent: { padding: 16, paddingBottom: 40 },
   keyboardContainer: { flex: 1 },

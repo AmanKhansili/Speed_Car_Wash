@@ -12,7 +12,7 @@ import Colors from "@/constants/colors";
 
 interface UserInfoCardProps {
   isPremium?: boolean;
-  phone?: string | null;          // Sourced from Supabase
+  phone?: string | null;
   onEditPress?: () => void;
   onChangeAvatar?: () => void;
   onAddPhone?: () => void;
@@ -143,7 +143,6 @@ const styles = StyleSheet.create({
   cardContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,

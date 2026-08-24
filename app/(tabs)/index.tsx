@@ -24,6 +24,7 @@ import { useBookingStore } from "@/store/bookingStore";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/expo";
+import NotificationBell from "@/components/home/notificationbell";
 
 const POPULAR_SERVICES = [
   {
@@ -141,11 +142,8 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity style={styles.notificationBtn}>
-            <Ionicons
-              name="notifications-outline"
-              size={22}
-              color={Colors.text}
-            />
+
+            <NotificationBell count={0} />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
         </View>

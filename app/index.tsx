@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Redirect } from "expo-router";
-import { useUser } from "@clerk/expo";
+import { useUser, useAuth } from "@clerk/expo";
 import { View, ActivityIndicator } from "react-native";
 import Colors from "@/constants/colors";
 import AuthGate from "@/components/auth/AuthGate";
@@ -8,9 +8,11 @@ import { syncUserToSupabase } from "@/utils/saveUser";
 
 export default function Index() {
   const { isLoaded, isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
+
   useEffect(() => {
     if (isLoaded && isSignedIn && user) {
-      syncUserToSupabase(user);
+      syncUserToSupabase(user, getToken);
     }
   }, [isLoaded, isSignedIn, user]);
 

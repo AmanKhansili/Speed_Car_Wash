@@ -5,13 +5,13 @@ import Colors from "@/constants/colors";
 
 interface MembershipBannerProps {
   memberSince?: string;
-  tier?: string;
+  tier: "Standard Member" | "Gold Member"| "Premium Member";
   onPressBanner?: () => void;
 }
 
 export default function MembershipBanner({
   memberSince = "New Member",
-  tier = "Premium Member",
+  tier = "Standard Member",
   onPressBanner,
 }: MembershipBannerProps) {
   return (
