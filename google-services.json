@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "344791003609",
+    "project_id": "speedcarwash-8a361",
+    "storage_bucket": "speedcarwash-8a361.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:344791003609:android:8c9a2d982380807d1029c8",
+        "android_client_info": {
+          "package_name": "com.amanjeet_singh.carwashapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAN1DVWew9NyKX_K4cWm91Q5lKpb2ipyRQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

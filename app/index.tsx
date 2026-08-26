@@ -5,6 +5,7 @@ import { View, ActivityIndicator } from "react-native";
 import Colors from "@/constants/colors";
 import AuthGate from "@/components/auth/AuthGate";
 import { syncUserToSupabase } from "@/utils/saveUser";
+import { registerForPushTokenAsync } from "@/utils/registerPushToken";
 
 export default function Index() {
   const { isLoaded, isSignedIn, user } = useUser();
@@ -12,7 +13,9 @@ export default function Index() {
 
   useEffect(() => {
     if (isLoaded && isSignedIn && user) {
-      syncUserToSupabase(user, getToken);
+      syncUserToSupabase(user, getToken).then(() => {
+        registerForPushTokenAsync(user.id, getToken);
+      });
     }
   }, [isLoaded, isSignedIn, user]);
 
