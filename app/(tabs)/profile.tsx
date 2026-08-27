@@ -52,10 +52,8 @@ export default function ProfileScreen() {
   const { signOut } = useClerk();
   const { user, isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { userId, getToken, isLoaded: isAuthLoaded } = useAuth();
-
   const isLoaded = isUserLoaded && isAuthLoaded;
   const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
-
   const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [stats, setStats] = useState({
@@ -64,19 +62,16 @@ export default function ProfileScreen() {
     upcoming: 0,
     savedServices: 0,
   });
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Edit Profile Modal States
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [firstNameInput, setFirstNameInput] = useState("");
   const [lastNameInput, setLastNameInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  // Settings Modal State
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
 
-  // Active Phone Fallback Priority: DB Phone -> Clerk Primary -> Clerk List -> Empty
   const activePhoneNumber = useMemo(() => {
     return (
       supabaseProfile?.phone ||
@@ -409,7 +404,6 @@ export default function ProfileScreen() {
         <ProfileMenuList onLogoutPress={handleLogout} />
       </ScrollView>
 
-      {/* Edit Profile Modal */}
       <Modal
         visible={isEditModalVisible}
         animationType="slide"
@@ -487,7 +481,6 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Settings Modal */}
       <Modal
         visible={isSettingsModalVisible}
         animationType="slide"

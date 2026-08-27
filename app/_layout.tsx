@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import {
   DarkTheme,
   DefaultTheme,
@@ -70,7 +70,7 @@ function RootLayoutNav() {
 
     return () => subscription.remove();
   }, [router]);
-  
+
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
