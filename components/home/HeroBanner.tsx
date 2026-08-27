@@ -1,5 +1,6 @@
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
+import { router } from "expo-router"; // 🚀 Router import kiya
 import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
@@ -10,10 +11,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router"; // 🚀 Router import kiya
 
 const { width } = Dimensions.get("window");
-const BANNER_WIDTH = width - 32;
+// const BANNER_WIDTH = width - 32;
 
 // 🚀 Banners ke saath dynamic route/category mapping add ki
 const bannerData = [
@@ -30,17 +30,17 @@ const bannerData = [
     title: "Premium\nCeramic Coating",
     sub: "Long-lasting Shine",
     color: "#1A1B41",
-    image: require("@/assets/images/banner3.png"),
-    imageStyle: { right: -50, top: 5, width: 350, height: 300 },
+    image: require("@/assets/images/banner2.png"),
+    imageStyle: { right: -50, top: -10, width: 270, height: 200 },
     category: "Coating", // 🚀 Service Screen Category Target
   },
   {
     id: "3",
-    title: "Deep Interior\nSanitization",
-    sub: "Kills 99% Germs",
+    title: "Intansive\nInternal Cleaning",
+    sub: "Deep Dry Clean",
     color: "#131039",
-    image: require("@/assets/images/banner2.png"),
-    imageStyle: { right: -50, top: -35, width: 300, height: 270 },
+    image: require("@/assets/images/banner3.png"),
+    imageStyle: { right: -30, top: -10, width: 270, height: 200 },
     category: "Detailing", // 🚀 Service Screen Category Target
   },
 ];
@@ -52,10 +52,10 @@ export default function HeroBanner() {
   useEffect(() => {
     const timer = setInterval(() => {
       let nextIndex = currentIndex === bannerData.length - 1 ? 0 : currentIndex + 1;
-      
+
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
       setCurrentIndex(nextIndex);
-    }, 3500);
+    }, 50000);
 
     return () => clearInterval(timer);
   }, [currentIndex]);
@@ -131,17 +131,17 @@ export default function HeroBanner() {
 const styles = StyleSheet.create({
   container: { marginBottom: 24 },
   card: {
-    width: BANNER_WIDTH,
+    width: 360,
     height: 180,
-    borderRadius: Radius.xl,
-    marginHorizontal: 16,
-    padding: 24,
+    // borderRadius: Radius.xl,
+    // marginHorizontal: 16,
+    padding: 20,
     justifyContent: "center",
     overflow: "hidden",
     position: "relative",
   },
   content: { zIndex: 2, maxWidth: "60%" },
-  title: { fontSize: 18, fontWeight: "800", color: "#FFF", lineHeight: 24, marginBottom: 8 },
+  title: { fontSize: 20, fontWeight: "800", color: "#FFF", lineHeight: 24, marginBottom: 8 },
   sub: { fontSize: 12, color: "#D1D5DB", marginBottom: 16 },
   btn: {
     backgroundColor: Colors.primary,
