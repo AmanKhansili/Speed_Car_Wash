@@ -4,13 +4,14 @@ import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -47,21 +48,20 @@ export default function BookingTabs() {
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [bookings, setBookings] = useState<BookingDisplayItem[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<BookingDisplayItem | null>(null);
   const [ratingTarget, setRatingTarget] = useState<BookingDisplayItem | null>(null);
 
-  useEffect(() => {
-    if (userId) {
-      fetchSupabaseBookings();
-    } else {
+  const fetchSupabaseBookings = useCallback(async () => {
+    if (!userId) {
       setLoading(false);
+      return;
     }
-  }, [userId]);
 
-  const fetchSupabaseBookings = async () => {
     try {
-      setLoading(true);
       const { data, error } = await clerkSupabase
         .from("bookings")
         .select("*")
@@ -120,7 +120,27 @@ export default function BookingTabs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [clerkSupabase, userId]);
+
+  useEffect(() => {
+    if (userId) {
+      fetchSupabaseBookings();
+    } else {
+      setLoading(false);
+    }
+  }, [userId, fetchSupabaseBookings]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setRefreshing(false), 3500);
+
+    await fetchSupabaseBookings();
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setRefreshing(false);
+  }, [fetchSupabaseBookings]);
 
   const handleCancel = async (id: string) => {
     Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
@@ -314,25 +334,37 @@ export default function BookingTabs() {
         </TouchableOpacity>
       )}
 
-      {loading ? (
-        <View style={styles.emptyBox}>
-          <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
-        </View>
-      ) : filteredBookings.length > 0 ? (
-        <FlatList
-          data={filteredBookings}
-          keyExtractor={(item) => item.id}
-          renderItem={renderBookingCard}
-          scrollEnabled={true}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContainer}
-        />
-      ) : (
-        <View style={styles.emptyBox}>
-          <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
-          <Text style={styles.emptyText}>No {activeTab} bookings found.</Text>
-        </View>
-      )}
+      {/* FlatList handling both Loaded list, Empty state, and Initial Loading state */}
+      <FlatList
+        data={loading ? [] : filteredBookings}
+        keyExtractor={(item) => item.id}
+        renderItem={renderBookingCard}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.listContainer,
+          (loading || filteredBookings.length === 0) && styles.emptyContainer,
+        ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary || "#2563EB"]}
+            tintColor={Colors.primary || "#2563EB"}
+          />
+        }
+        ListEmptyComponent={() => (
+          <View style={styles.emptyBox}>
+            {loading && !refreshing ? (
+              <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+            ) : (
+              <>
+                <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
+                <Text style={styles.emptyText}>No {activeTab} bookings found.</Text>
+              </>
+            )}
+          </View>
+        )}
+      />
 
       {/* Digital Receipt Modal */}
       <Modal
@@ -459,6 +491,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   listContainer: { paddingBottom: 240 },
+  emptyContainer: { flexGrow: 1, justifyContent: "center" },
   tabText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
   activeTabText: { color: Colors.primary || "#2563EB" },
   addBookingBtn: {

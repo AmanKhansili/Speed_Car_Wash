@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import ReviewCard from "@/components/cards/ReviewCard";
 import ServiceCard from "@/components/cards/ServiceCard";
+import RefreshableScrollView from "@/components/common/RefreshableScrollView"; // <-- 1. Import Here
 import SectionTitle from "@/components/common/SectionTitle";
 import HeroBanner from "@/components/home/HeroBanner";
 import MembershipBanner from "@/components/home/MembershipBanner";
@@ -125,6 +126,37 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const fetchLocation = useCallback(async () => {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== "granted") {
+        setAddress("Delhi, India");
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      let geoCode = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      if (geoCode.length > 0) {
+        const currentPlace = geoCode[0];
+        const formattedAddress = `${currentPlace.district || currentPlace.city}, ${currentPlace.region}`;
+        setAddress(formattedAddress);
+      }
+    } catch (error) {
+      console.log("Location Error:", error);
+      setAddress("Delhi, India");
+    }
+  }, []);
+
+  // 2. Combined Refresh Function for Pull-to-Refresh
+  const handleScreenRefresh = useCallback(async () => {
+    await Promise.all([fetchLiveReviews(), fetchLocation()]);
+  }, [fetchLiveReviews, fetchLocation]);
+
   useFocusEffect(
     useCallback(() => {
       fetchLiveReviews();
@@ -132,38 +164,18 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    (async () => {
-      try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-
-        if (status !== "granted") {
-          setAddress("Delhi, India");
-          return;
-        }
-
-        let location = await Location.getCurrentPositionAsync({});
-        let geoCode = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-
-        if (geoCode.length > 0) {
-          const currentPlace = geoCode[0];
-          const formattedAddress = `${currentPlace.district || currentPlace.city}, ${currentPlace.region}`;
-          setAddress(formattedAddress);
-        }
-      } catch (error) {
-        console.log("Location Error:", error);
-        setAddress("Delhi, India");
-      }
-    })();
-  }, []);
+    fetchLocation();
+  }, [fetchLocation]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      {/* 3. Outer ScrollView replaced with RefreshableScrollView */}
+      <RefreshableScrollView
+        onRefresh={handleScreenRefresh}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* HEADER */}
         <View style={styles.header}>
           <View>
@@ -271,7 +283,7 @@ export default function HomeScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
+      </RefreshableScrollView>
 
       {/* ALL REVIEWS FULL MODAL */}
       <Modal

@@ -1,4 +1,5 @@
 import AuthGate from "@/components/auth/AuthGate";
+import RefreshableScrollView from "@/components/common/RefreshableScrollView";
 import MembershipBanner from "@/components/profile/MembershipBanner";
 import MyVehiclesSection from "@/components/profile/MyVehiclesSection";
 import ProfileMenuList from "@/components/profile/ProfileMenuList";
@@ -25,7 +26,6 @@ import {
   Linking,
   Modal,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -53,7 +53,12 @@ export default function ProfileScreen() {
   const { user, isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { userId, getToken, isLoaded: isAuthLoaded } = useAuth();
   const isLoaded = isUserLoaded && isAuthLoaded;
-  const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
+  const db = useMemo(() => {
+    return createClerkSupabaseClient(async () => {
+      return await getToken({ skipCache: true });
+    });
+  }, [getToken]);
+
   const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [stats, setStats] = useState({
@@ -89,7 +94,6 @@ export default function ProfileScreen() {
       }
 
       try {
-        // 1. Instant Local Cache Fetch
         const cachedProfile = await getCachedProfileData();
         const cachedStats = await getCachedStatsData();
 
@@ -106,38 +110,53 @@ export default function ProfileScreen() {
           return;
         }
 
-        // 2. Fetch Profile safely without overwriting existing DB data
-        const { data: profileData, error: profileErr } = await db
-          .from("profiles")
-          .select("name, phone, created_at, membership_tier")
-          .eq("clerk_user_id", userId)
-          .maybeSingle();
+        // Fast Parallel Fetch
+        const [profileRes, bookingsRes, subscriptionRes] = await Promise.all([
+          db
+            .from("profiles")
+            .select("name, phone, created_at, membership_tier")
+            .eq("clerk_user_id", userId)
+            .maybeSingle(),
+          db
+            .from("bookings")
+            .select("*")
+            .or(`clerk_user_id.eq.${userId},user_id.eq.${userId}`)
+            .order("created_at", { ascending: false }),
+          db
+            .from("subscriptions")
+            .select("tier, status, current_period_end")
+            .eq("clerk_user_id", userId)
+            .eq("status", "active")
+            .gt("current_period_end", new Date().toISOString())
+            .maybeSingle(),
+        ]);
 
-        if (profileErr) {
-          console.error("Error fetching profile:", profileErr);
-          setIsLoading(false);
-          return;
-        }
-
-        if (profileData) {
-          // DB Record exists: Keep DB phone or fallback to Clerk if empty
+        if (profileRes.error) {
+          console.error("Error fetching profile:", profileRes.error);
+        } else if (profileRes.data) {
+          const profileData = profileRes.data;
           const finalPhone =
             profileData.phone ||
             user?.primaryPhoneNumber?.phoneNumber ||
             user?.phoneNumbers?.[0]?.phoneNumber ||
             null;
 
+          const activeTier = subscriptionRes.data?.tier
+            ? subscriptionRes.data.tier.toLowerCase().includes("gold")
+              ? "gold"
+              : "premium"
+            : "standard";
+
           const formattedProfile = {
             name: profileData.name,
             phone: finalPhone,
             created_at: profileData.created_at,
-            membership_tier: profileData.membership_tier,
+            membership_tier: activeTier,
           };
 
           setSupabaseProfile(formattedProfile);
           await saveProfileCache(formattedProfile);
         } else {
-          // Record genuinely missing -> safe to create first time
           const clerkPhone =
             user?.primaryPhoneNumber?.phoneNumber || user?.phoneNumbers?.[0]?.phoneNumber || null;
 
@@ -154,11 +173,7 @@ export default function ProfileScreen() {
 
           if (insertErr) {
             console.error("Error creating profile:", insertErr);
-            setIsLoading(false);
-            return;
-          }
-
-          if (newProfile) {
+          } else if (newProfile) {
             const formattedProfile = {
               name: newProfile.name,
               phone: newProfile.phone,
@@ -170,18 +185,10 @@ export default function ProfileScreen() {
           }
         }
 
-        // 3. Fetch Bookings
-        const { data: bookingsData, error: bErr } = await db
-          .from("bookings")
-          .select("*")
-          .or(`clerk_user_id.eq.${userId},user_id.eq.${userId}`)
-          .order("created_at", { ascending: false });
-
-        if (bErr) {
-          console.error("Error fetching bookings:", bErr);
-        }
-
-        if (!bErr && bookingsData) {
+        if (bookingsRes.error) {
+          console.error("Error fetching bookings:", bookingsRes.error);
+        } else if (bookingsRes.data) {
+          const bookingsData = bookingsRes.data;
           const quickCards = bookingsData.filter(
             (b: any) =>
               b.status === "Saved" ||
@@ -190,16 +197,21 @@ export default function ProfileScreen() {
           );
           setSavedCards(quickCards);
 
-          const completed = bookingsData.filter(
+          const actualBookings = bookingsData.filter(
+            (b: any) =>
+              b.status?.toLowerCase() !== "saved" && b.status?.toLowerCase() !== "saved_template",
+          );
+
+          const completed = actualBookings.filter(
             (b: any) => b.status?.toLowerCase() === "completed",
           ).length;
 
-          const upcoming = bookingsData.filter((b: any) =>
+          const upcoming = actualBookings.filter((b: any) =>
             ["confirmed", "pending", "upcoming"].includes(b.status?.toLowerCase()),
           ).length;
 
           const freshStats = {
-            totalBookings: bookingsData.length,
+            totalBookings: actualBookings.length,
             completed,
             upcoming,
             savedServices: quickCards.length,
@@ -246,13 +258,11 @@ export default function ProfileScreen() {
     try {
       setIsSavingProfile(true);
 
-      // 1. Update Name in Clerk
       await user.update({
         firstName: firstNameInput.trim(),
         lastName: lastNameInput.trim(),
       });
 
-      // 2. Explicitly Update Phone and Name in Supabase
       const formattedPhone = phoneInput.trim();
       const fullName = `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
 
@@ -292,7 +302,6 @@ export default function ProfileScreen() {
     setSavedCards((prev) => prev.filter((c) => c.id !== cardId));
     setStats((prev) => ({
       ...prev,
-      totalBookings: Math.max(0, prev.totalBookings - 1),
       savedServices: Math.max(0, prev.savedServices - 1),
     }));
 
@@ -343,14 +352,6 @@ export default function ProfileScreen() {
     ]);
   };
 
-  if (!isLoaded) {
-    return (
-      <View style={[styles.container, styles.loadingCenter]}>
-        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
-      </View>
-    );
-  }
-
   if (!isSignedIn) return <AuthGate />;
 
   return (
@@ -365,7 +366,11 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <RefreshableScrollView
+        isLoading={!isLoaded || (isLoading && !supabaseProfile)}
+        onRefresh={() => fetchUserData(true)}
+        contentContainerStyle={styles.scrollContent}
+      >
         <UserInfoCard
           phone={activePhoneNumber}
           onEditPress={handleOpenEditModal}
@@ -393,16 +398,10 @@ export default function ProfileScreen() {
           totalBookings={stats.totalBookings}
           completed={stats.completed}
           upcoming={stats.upcoming}
-          savedServices={stats.savedServices}
-          onStatPress={(type) => {
-            type === "saved"
-              ? router.push("/saved-services" as any)
-              : router.push("/(tabs)/bookings" as any);
-          }}
         />
 
         <ProfileMenuList onLogoutPress={handleLogout} />
-      </ScrollView>
+      </RefreshableScrollView>
 
       <Modal
         visible={isEditModalVisible}
@@ -556,7 +555,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
-  loadingCenter: { justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
     alignItems: "center",

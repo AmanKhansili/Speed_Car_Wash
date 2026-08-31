@@ -1,19 +1,20 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useAuth } from "@clerk/expo";
 import Colors from "@/constants/colors";
 import { createClerkSupabaseClient } from "@/utils/supabase";
+import { useAuth } from "@clerk/expo";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type Subscription = {
   id: string;
@@ -32,114 +33,93 @@ const TIER_COLORS: Record<string, string> = {
   "Premium Member": "#7C3AED",
 };
 
-export default function MembershipStatusScreen() {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+const CACHE_KEY = "MEMBERSHIP_STATUS_CACHE";
 
-  const [loading, setLoading] = useState(true);
+export default function MembershipStatusScreen() {
+  const { userId, getToken, isLoaded, isSignedIn } = useAuth();
+
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [current, setCurrent] = useState<Subscription | null>(null);
   const [history, setHistory] = useState<Subscription[]>([]);
 
+  const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
+
+  // 1. Instant Cache Load
   useEffect(() => {
-    let isMounted = true;
-
-    const load = async () => {
-      console.log("STATUS PAGE: isLoaded", isLoaded, "isSignedIn", isSignedIn);
-
-      if (!isLoaded || !isSignedIn) {
-        setLoading(false);
-        return;
-      }
+    (async () => {
       try {
-        console.log("STATUS PAGE: fetching subscriptions...");
-        const clerkSupabase = createClerkSupabaseClient(getToken);
-        const { data, error } = await clerkSupabase
-          .from("subscriptions")
-          .select(
-            "id, plan_name, tier, status, current_period_end, base_price, total_amount, created_at",
-          )
-          .order("created_at", { ascending: false });
-
-        console.log("STATUS PAGE: result", { data, error });
-
-        if (!isMounted) return;
-
-        if (error) {
-          console.error("Error fetching subscriptions:", error.message);
-          setCurrent(null);
-          setHistory([]);
+        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.current) setCurrent(parsed.current);
+          if (parsed.history) setHistory(parsed.history);
         } else {
-          const rows = (data as Subscription[]) || [];
-          const activeOne =
-            rows.find(
-              (r) =>
-                r.status === "active" &&
-                new Date(r.current_period_end).getTime() > Date.now(),
-            ) || null;
-          setCurrent(activeOne);
-          setHistory(rows);
+          setLoading(true); // Sirf pehli baar loader dikhega agar cache bilkul empty ho
         }
-      } catch (err) {
-        console.error("STATUS PAGE: unexpected error", err);
-      } finally {
-        if (isMounted) {
-          console.log("STATUS PAGE: setLoading(false)");
-          setLoading(false);
-        }
+      } catch (e) {
+        console.error("Cache read error", e);
       }
-    };
+    })();
+  }, []);
 
-    load();
+  // 2. Fetch from Supabase
+  const fetchSubscriptions = useCallback(async () => {
+    if (!userId) return;
 
-    return () => {
-      isMounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, isSignedIn]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
     try {
-      const clerkSupabase = createClerkSupabaseClient(getToken);
-      const { data, error } = await clerkSupabase
+      const { data, error } = await db
         .from("subscriptions")
         .select(
           "id, plan_name, tier, status, current_period_end, base_price, total_amount, created_at",
         )
+        .eq("clerk_user_id", userId)
         .order("created_at", { ascending: false });
 
-      if (!error) {
+      if (error) {
+        console.error("Error fetching subscriptions:", error.message);
+      } else {
         const rows = (data as Subscription[]) || [];
         const activeOne =
           rows.find(
             (r) =>
-              r.status === "active" &&
+              r.status?.toLowerCase() === "active" &&
               new Date(r.current_period_end).getTime() > Date.now(),
           ) || null;
+
         setCurrent(activeOne);
         setHistory(rows);
+
+        // Background me cache save
+        AsyncStorage.setItem(
+          CACHE_KEY,
+          JSON.stringify({ current: activeOne, history: rows }),
+        ).catch(() => {});
       }
+    } catch (err) {
+      console.error("Unexpected error in fetching subscriptions:", err);
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
+  }, [db, userId]);
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn && userId) {
+      fetchSubscriptions();
+    }
+  }, [isLoaded, isSignedIn, userId, fetchSubscriptions]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchSubscriptions();
+    setRefreshing(false);
   };
 
   const daysLeft = current
     ? Math.ceil(
-        (new Date(current.current_period_end).getTime() - Date.now()) /
-          (1000 * 60 * 60 * 24),
+        (new Date(current.current_period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
       )
     : 0;
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -151,108 +131,119 @@ export default function MembershipStatusScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {current ? (
-          <>
-            <View
-              style={[
-                styles.currentCard,
-                { backgroundColor: TIER_COLORS[current.tier] || "#1E293B" }, 
-              ]}
-            >
-              <Text style={styles.currentBadge}>ACTIVE MEMBERSHIP</Text>
-              <Text style={styles.currentTier}>{current.tier}</Text>
-              <Text style={styles.currentExpiry}>
-                {daysLeft > 0
-                  ? `Expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`
-                  : "Expires today"}
-              </Text>
-              <Text style={styles.currentDate}>
-                Valid till{" "}
-                {new Date(current.current_period_end).toLocaleDateString(
-                  "en-IN",
-                  { day: "numeric", month: "long", year: "numeric" },
-                )}
-              </Text>
-            </View>
-
-            {daysLeft <= 5 && (
-              <View style={styles.renewBanner}>
-                <Ionicons name="alert-circle" size={18} color="#B45309" />
-                <Text style={styles.renewText}>
-                  Your membership is expiring soon. Renew to keep enjoying
-                  benefits without interruption.
+      {loading && !current && history.length === 0 ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[Colors.primary || "#2563EB"]}
+              tintColor={Colors.primary || "#2563EB"}
+            />
+          }
+        >
+          {current ? (
+            <>
+              <View
+                style={[
+                  styles.currentCard,
+                  { backgroundColor: TIER_COLORS[current.tier] || "#1E293B" },
+                ]}
+              >
+                <Text style={styles.currentBadge}>ACTIVE MEMBERSHIP</Text>
+                <Text style={styles.currentTier}>{current.tier}</Text>
+                <Text style={styles.currentExpiry}>
+                  {daysLeft > 0
+                    ? `Expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`
+                    : "Expires today"}
                 </Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.renewBtn}
-              onPress={() => router.push("/membership" as any)}
-            >
-              <Text style={styles.renewBtnText}>
-                {daysLeft <= 5 ? "Renew Membership" : "Upgrade / Change Plan"}
-              </Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <View style={styles.noMembership}>
-            <Ionicons name="star-outline" size={40} color="#9CA3AF" />
-            <Text style={styles.noMembershipTitle}>No Active Membership</Text>
-            <Text style={styles.noMembershipSubtitle}>
-              Get a membership plan to unlock exclusive benefits and pricing.
-            </Text>
-            <TouchableOpacity
-              style={styles.getBtn}
-              onPress={() => router.push("/membership" as any)}
-            >
-              <Text style={styles.getBtnText}>View Plans</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <Text style={styles.sectionTitle}>Payment History</Text>
-        {history.length === 0 ? (
-          <Text style={styles.emptyText}>No membership payments yet.</Text>
-        ) : (
-          history.map((item) => (
-            <View key={item.id} style={styles.historyCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.historyTier}>{item.tier}</Text>
-                <Text style={styles.historyDate}>
-                  {new Date(item.created_at).toLocaleDateString("en-IN", {
+                <Text style={styles.currentDate}>
+                  Valid till{" "}
+                  {new Date(current.current_period_end).toLocaleDateString("en-IN", {
                     day: "numeric",
-                    month: "short",
+                    month: "long",
                     year: "numeric",
                   })}
                 </Text>
               </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={styles.historyAmount}>
-                  ₹{item.total_amount ?? item.base_price}
+
+              {daysLeft <= 5 && (
+                <View style={styles.renewBanner}>
+                  <Ionicons name="alert-circle" size={18} color="#B45309" />
+                  <Text style={styles.renewText}>
+                    Your membership is expiring soon. Renew to keep enjoying benefits without
+                    interruption.
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.renewBtn}
+                onPress={() => router.push("/membership" as any)}
+              >
+                <Text style={styles.renewBtnText}>
+                  {daysLeft <= 5 ? "Renew Membership" : "Upgrade / Change Plan"}
                 </Text>
-                <View
-                  style={[
-                    styles.statusPill,
-                    item.status === "active"
-                      ? styles.statusActive
-                      : item.status === "Pending"
-                        ? styles.statusPending
-                        : styles.statusFailed,
-                  ]}
-                >
-                  <Text style={styles.statusPillText}>{item.status}</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.noMembership}>
+              <Ionicons name="star-outline" size={40} color="#9CA3AF" />
+              <Text style={styles.noMembershipTitle}>No Active Membership</Text>
+              <Text style={styles.noMembershipSubtitle}>
+                Get a membership plan to unlock exclusive benefits and pricing.
+              </Text>
+              <TouchableOpacity
+                style={styles.getBtn}
+                onPress={() => router.push("/membership" as any)}
+              >
+                <Text style={styles.getBtnText}>View Plans</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Text style={styles.sectionTitle}>Payment History</Text>
+          {history.length === 0 ? (
+            <Text style={styles.emptyText}>No membership payments yet.</Text>
+          ) : (
+            history.map((item) => (
+              <View key={item.id} style={styles.historyCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.historyTier}>{item.tier}</Text>
+                  <Text style={styles.historyDate}>
+                    {new Date(item.created_at).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={styles.historyAmount}>₹{item.total_amount ?? item.base_price}</Text>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      item.status?.toLowerCase() === "active"
+                        ? styles.statusActive
+                        : item.status?.toLowerCase() === "pending"
+                          ? styles.statusPending
+                          : styles.statusFailed,
+                    ]}
+                  >
+                    <Text style={styles.statusPillText}>{item.status}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+            ))
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
