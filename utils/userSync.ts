@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAuth, useUser } from "@clerk/expo";
 import { syncUserToSupabase } from "@/utils/saveUser";
+import { registerForPushTokenAsync } from "@/utils/registerPushToken";
 
 export function useSyncClerkUser() {
   const { isLoaded: isAuthLoaded, isSignedIn, getToken } = useAuth();
@@ -8,7 +9,9 @@ export function useSyncClerkUser() {
 
   useEffect(() => {
     if (isAuthLoaded && isUserLoaded && isSignedIn && user) {
-      syncUserToSupabase(user, getToken);
+      syncUserToSupabase(user, getToken).then(() => {
+        registerForPushTokenAsync(user.id, getToken);
+      });
     }
   }, [isAuthLoaded, isUserLoaded, isSignedIn, user]);
 }

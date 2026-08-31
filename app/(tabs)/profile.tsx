@@ -52,7 +52,6 @@ export default function ProfileScreen() {
   const { signOut } = useClerk();
   const { user, isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { userId, getToken, isLoaded: isAuthLoaded } = useAuth();
-
   const isLoaded = isUserLoaded && isAuthLoaded;
   const db = useMemo(() => {
     return createClerkSupabaseClient(async () => {
@@ -68,16 +67,14 @@ export default function ProfileScreen() {
     upcoming: 0,
     savedServices: 0,
   });
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Edit Profile Modal States
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [firstNameInput, setFirstNameInput] = useState("");
   const [lastNameInput, setLastNameInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  // Settings Modal State
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
 
   const activePhoneNumber = useMemo(() => {
@@ -406,7 +403,6 @@ export default function ProfileScreen() {
         <ProfileMenuList onLogoutPress={handleLogout} />
       </RefreshableScrollView>
 
-      {/* Edit Profile Modal */}
       <Modal
         visible={isEditModalVisible}
         animationType="slide"
@@ -484,7 +480,6 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Settings Modal */}
       <Modal
         visible={isSettingsModalVisible}
         animationType="slide"
