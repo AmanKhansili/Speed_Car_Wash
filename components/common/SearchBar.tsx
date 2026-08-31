@@ -23,9 +23,9 @@ export default function SearchBar({
         placeholderTextColor={Colors.textLight}
         onChangeText={onSearch}
       />
-      <TouchableOpacity style={styles.filterBtn}>
+      {/* <TouchableOpacity style={styles.filterBtn}>
         <Ionicons name="options-outline" size={20} color={Colors.primary} />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </View>
   );
 }

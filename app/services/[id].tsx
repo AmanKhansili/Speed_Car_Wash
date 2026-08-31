@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
 
   imageContainer: { width: "100%", height: 300, position: "relative" },
   mainImage: { width: "100%", height: "100%" },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
+  overlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.3)" },
   headerSafe: { position: "absolute", top: 0, left: 0, right: 0, paddingHorizontal: 16 },
   backBtn: {
     width: 40,

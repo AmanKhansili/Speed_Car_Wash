@@ -1,11 +1,15 @@
-import React, { useEffect } from "react";
+import { useAuth, useUser } from "@clerk/expo";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Redirect } from "expo-router";
-import { useUser, useAuth } from "@clerk/expo";
-import { View, ActivityIndicator } from "react-native";
-import Colors from "@/constants/colors";
+import { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
+
 import AuthGate from "@/components/auth/AuthGate";
-import { syncUserToSupabase } from "@/utils/saveUser";
+import Colors from "@/constants/colors";
 import { registerForPushTokenAsync } from "@/utils/registerPushToken";
+import { syncUserToSupabase } from "@/utils/saveUser";
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 export default function Index() {
   const { isLoaded, isSignedIn, user } = useUser();
@@ -14,25 +18,24 @@ export default function Index() {
   useEffect(() => {
     if (isLoaded && isSignedIn && user) {
       syncUserToSupabase(user, getToken).then(() => {
-        registerForPushTokenAsync(user.id, getToken);
+        if (!isExpoGo) {
+          registerForPushTokenAsync(user.id, getToken);
+        }
       });
     }
-  }, [isLoaded, isSignedIn, user]);
+  }, [isLoaded, isSignedIn, user, getToken]);
 
-  // Jab tak Clerk state load ho rahi hai, loading spinner dikhayein
   if (!isLoaded) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
       </View>
     );
   }
 
-  // Agar user signed-in hai, toh seedha main tabs par bhej dein
   if (isSignedIn) {
     return <Redirect href="/(tabs)" />;
   }
 
-  // Agar signed-out hai, toh Google/Email wala AuthGate render karein
   return <AuthGate />;
 }

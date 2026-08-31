@@ -3,8 +3,8 @@ import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -36,6 +36,7 @@ const TIER_COLORS: Record<string, string> = {
 const CACHE_KEY = "MEMBERSHIP_STATUS_CACHE";
 
 export default function MembershipStatusScreen() {
+  const router = useRouter();
   const { userId, getToken, isLoaded, isSignedIn } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -43,27 +44,36 @@ export default function MembershipStatusScreen() {
   const [current, setCurrent] = useState<Subscription | null>(null);
   const [history, setHistory] = useState<Subscription[]>([]);
 
-  const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
+  // 🚀 FIXED: Dynamic Token Callback so db client is persistent per user
+  const db = useMemo(() => {
+    return createClerkSupabaseClient(async () => {
+      return await getToken();
+    });
+  }, [userId]);
 
-  // 1. Instant Cache Load
+  // 1. Load Local Cache Instantly
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       try {
         const cached = await AsyncStorage.getItem(CACHE_KEY);
-        if (cached) {
+        if (cached && isMounted) {
           const parsed = JSON.parse(cached);
           if (parsed.current) setCurrent(parsed.current);
           if (parsed.history) setHistory(parsed.history);
-        } else {
-          setLoading(true); // Sirf pehli baar loader dikhega agar cache bilkul empty ho
+        } else if (isMounted) {
+          setLoading(true);
         }
       } catch (e) {
-        console.error("Cache read error", e);
+        console.error("Cache read error:", e);
       }
     })();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // 2. Fetch from Supabase
+  // 2. Fetch Fresh Data from Supabase
   const fetchSubscriptions = useCallback(async () => {
     if (!userId) return;
 
@@ -90,7 +100,7 @@ export default function MembershipStatusScreen() {
         setCurrent(activeOne);
         setHistory(rows);
 
-        // Background me cache save
+        // Async Cache Save
         AsyncStorage.setItem(
           CACHE_KEY,
           JSON.stringify({ current: activeOne, history: rows }),
@@ -121,10 +131,19 @@ export default function MembershipStatusScreen() {
       )
     : 0;
 
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/profile" as any);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBackPress}>
           <Ionicons name="chevron-back" size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Membership</Text>
@@ -153,7 +172,9 @@ export default function MembershipStatusScreen() {
               <View
                 style={[
                   styles.currentCard,
-                  { backgroundColor: TIER_COLORS[current.tier] || "#1E293B" },
+                  {
+                    backgroundColor: TIER_COLORS[current.tier] || "#1E293B",
+                  },
                 ]}
               >
                 <Text style={styles.currentBadge}>ACTIVE MEMBERSHIP</Text>

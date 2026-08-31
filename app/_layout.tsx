@@ -1,30 +1,35 @@
-import React, { useEffect } from "react";
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
+import { ClerkLoaded, ClerkProvider, useAuth } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import "react-native-reanimated";
+import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/expo";
-import { tokenCache } from "@clerk/expo/token-cache";
-import * as Notifications from "expo-notifications";
+import "react-native-reanimated";
 
-import { /*useUser,*/ UserProvider } from "@/context/userContext";
+import { UserProvider } from "@/context/userContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
-// this for notification testing only while app is open
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Check if running inside Expo Go
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+// Setup notifications only outside Expo Go (Development / Production builds)
+if (!isExpoGo) {
+  try {
+    const Notifications = require("expo-notifications");
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (err) {
+    console.warn("Notifications setup skipped:", err);
+  }
+}
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -33,57 +38,66 @@ export const unstable_settings = {
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
 if (!publishableKey) {
-  throw new Error(
-    "Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY — check your .env file",
-  );
+  throw new Error("Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY — check your .env file");
 }
 
-// Internal Navigation Component jo UserContext ko consume karega
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const router = useRouter();
-  // const { userData } = useUser();
 
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const data = response.notification.request.content.data as {
-          bookingId?: string;
-          type?: string;
-        };
+    if (isExpoGo) return;
 
-        if (!data?.type) return;
+    try {
+      const Notifications = require("expo-notifications");
+      const subscription = Notifications.addNotificationResponseReceivedListener(
+        (response: any) => {
+          const data = response?.notification?.request?.content?.data as {
+            bookingId?: string;
+            type?: string;
+          };
 
-        if (data.type === "status_check" || data.type === "review_request") {
-          router.push({
-            pathname: "/booking/service-check",
-            params: { bookingId: data.bookingId, type: data.type },
-          });
-        } else if (
-          data.type === "booking_reminder_evening" ||
-          data.type === "booking_reminder_morning"
-        ) {
-          router.push("/(tabs)/bookings" as any);
-        }
-      },
-    );
+          if (!data?.type) return;
 
-    return () => subscription.remove();
+          if (data.type === "status_check" || data.type === "review_request") {
+            router.push({
+              pathname: "/booking/service-check",
+              params: { bookingId: data.bookingId, type: data.type },
+            });
+          } else if (
+            data.type === "booking_reminder_evening" ||
+            data.type === "booking_reminder_morning"
+          ) {
+            router.push("/(tabs)/bookings" as any);
+          }
+        },
+      );
+
+      return () => subscription.remove();
+    } catch (err) {
+      console.warn("Notifications listener error:", err);
+    }
   }, [router]);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
+    <>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: {
+            backgroundColor: colorScheme === "dark" ? "#0F172A" : "#FFFFFF",
+          },
+        }}
+      >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="booking" />
         <Stack.Screen name="auth" />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+    </>
   );
 }
 
-// Naya wrapper — Clerk se userId nikaal ke UserProvider ko pass karega
 function UserProviderWithClerk({ children }: { children: React.ReactNode }) {
   const { userId, getToken } = useAuth();
 
@@ -94,7 +108,6 @@ function UserProviderWithClerk({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Main Root Layout Provider Wrapper
 export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>

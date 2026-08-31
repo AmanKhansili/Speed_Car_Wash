@@ -5,7 +5,7 @@ import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth } from "@clerk/expo";
 import { useRazorpay } from "@codearcade/expo-razorpay";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,

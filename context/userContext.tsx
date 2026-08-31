@@ -1,23 +1,24 @@
-import { LocalUserData, UserLocation, Vehicle, NewVehicle } from "@/types/user";
+import { LocalUserData, NewVehicle, UserLocation, Vehicle } from "@/types/user";
 import { createClerkSupabaseClient } from "@/utils/supabase";
 import {
+  addVehicleWithSync,
   getLocalUserData,
+  overwriteVehiclesLocally,
   removeVehicleLocally,
   saveLocationLocally,
   savePhoneLocally,
   setSelectedVehicleLocally,
-  addVehicleWithSync,
-  overwriteVehiclesLocally,
 } from "@/utils/userStorage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, {
+import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
-  useState,
   useMemo,
-  useCallback,
+  useRef,
+  useState,
 } from "react";
 
 // 1. Context Type Interface
@@ -42,14 +43,8 @@ interface UserProviderProps {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 // 2. Provider Component
-export const UserProvider = ({
-  children,
-  userId,
-  getToken,
-}: UserProviderProps) => {
-  const [userData, setUserData] = useState<
-    LocalUserData & { bookings?: any[] }
-  >({
+export const UserProvider = ({ children, userId, getToken }: UserProviderProps) => {
+  const [userData, setUserData] = useState<LocalUserData & { bookings?: any[] }>({
     mobileNumber: "",
     location: null,
     vehicles: [],
@@ -59,14 +54,23 @@ export const UserProvider = ({
   });
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Clerk session token memoized client
-  const clerkSupabase = useMemo(() => {
-    if (!getToken) return null;
-    return createClerkSupabaseClient(getToken);
+  // Stable token getter ref to avoid re-instantiating client
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
   }, [getToken]);
 
+  const clerkSupabase = useMemo(() => {
+    return createClerkSupabaseClient(async () => {
+      if (getTokenRef.current) {
+        return await getTokenRef.current();
+      }
+      return null;
+    });
+  }, []);
+
   const syncWithDB = useCallback(async () => {
-    if (!userId || !clerkSupabase) return;
+    if (!userId) return;
 
     try {
       const { data: dbVehicles, error } = await clerkSupabase
@@ -86,31 +90,24 @@ export const UserProvider = ({
 
       const currentLocal = await getLocalUserData();
       const stillHasSelected = formattedVehicles.some(
-        (v) => v.id === currentLocal.selectedVehicleId
+        (v) => v.id === currentLocal.selectedVehicleId,
       );
       const newSelectedId = stillHasSelected
         ? currentLocal.selectedVehicleId
         : formattedVehicles[0]?.id || null;
 
-      // overwriteVehiclesLocally(vehicles, selectedId) calling
-      const updatedLocalData = await overwriteVehiclesLocally(
-        formattedVehicles,
-        newSelectedId
-      );
+      const updatedLocalData = await overwriteVehiclesLocally(formattedVehicles, newSelectedId);
 
       setUserData((prev) => ({
         ...prev,
         ...updatedLocalData,
       }));
     } catch (error) {
-      console.warn(
-        "[UserContext] DB Sync failed, using cached storage:",
-        error
-      );
+      console.warn("[UserContext] DB Sync failed, using cached storage:", error);
     }
   }, [userId, clerkSupabase]);
 
-  // App load par Local Storage se state read
+  // Initial local storage read
   useEffect(() => {
     const initData = async () => {
       const data = await getLocalUserData();
@@ -127,12 +124,12 @@ export const UserProvider = ({
     initData();
   }, []);
 
-  // Sync on userId/Auth availability
+  // Sync only once when userId becomes available
   useEffect(() => {
-    if (userId && isLoaded && clerkSupabase) {
+    if (userId && isLoaded) {
       syncWithDB();
     }
-  }, [userId, isLoaded, clerkSupabase, syncWithDB]);
+  }, [userId, isLoaded, syncWithDB]);
 
   const updatePhone = async (phone: string) => {
     const updated = await savePhoneLocally(phone);
@@ -148,10 +145,7 @@ export const UserProvider = ({
 
   const addVehicle = async (veh: NewVehicle): Promise<Vehicle> => {
     if (!userId) {
-      throw new Error("addVehicle: userId is missing, user logged in nahi hai");
-    }
-    if (!clerkSupabase) {
-      throw new Error("addVehicle: clerkSupabase client ready nahi hai");
+      throw new Error("addVehicle: userId is missing");
     }
 
     const result = await addVehicleWithSync(veh, userId, clerkSupabase);
@@ -166,9 +160,8 @@ export const UserProvider = ({
   };
 
   const updateVehicle = async (vehicle: Vehicle) => {
-    if (!userId || !clerkSupabase) return;
+    if (!userId) return;
 
-    // Supabase DB update
     const { error } = await clerkSupabase
       .from("vehicles")
       .update({
@@ -191,9 +184,6 @@ export const UserProvider = ({
   const deleteVehicle = async (id: string) => {
     if (!userId) {
       throw new Error("deleteVehicle: userId is missing");
-    }
-    if (!clerkSupabase) {
-      throw new Error("deleteVehicle: clerkSupabase client ready nahi hai");
     }
 
     const { error } = await clerkSupabase

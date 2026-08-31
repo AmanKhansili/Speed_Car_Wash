@@ -17,7 +17,7 @@ import {
 import { useAuth, useClerk, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -53,11 +53,21 @@ export default function ProfileScreen() {
   const { user, isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { userId, getToken, isLoaded: isAuthLoaded } = useAuth();
   const isLoaded = isUserLoaded && isAuthLoaded;
+
+  // Stable token getter ref to prevent db client re-instantiation
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
   const db = useMemo(() => {
     return createClerkSupabaseClient(async () => {
-      return await getToken({ skipCache: true });
+      if (getTokenRef.current) {
+        return await getTokenRef.current();
+      }
+      return null;
     });
-  }, [getToken]);
+  }, []);
 
   const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
@@ -84,7 +94,7 @@ export default function ProfileScreen() {
       user?.phoneNumbers?.[0]?.phoneNumber ||
       ""
     );
-  }, [supabaseProfile, user]);
+  }, [supabaseProfile?.phone, user?.primaryPhoneNumber?.phoneNumber, user?.phoneNumbers]);
 
   const fetchUserData = useCallback(
     async (forceRefresh = false) => {
@@ -226,19 +236,22 @@ export default function ProfileScreen() {
         setIsLoading(false);
       }
     },
-    [userId, db, user],
+    [
+      userId,
+      db,
+      user?.primaryPhoneNumber?.phoneNumber,
+      user?.phoneNumbers,
+      user?.firstName,
+      user?.lastName,
+    ],
   );
 
   useFocusEffect(
     useCallback(() => {
-      let isMounted = true;
-      if (isLoaded && userId && isMounted) {
-        fetchUserData(true);
+      if (isLoaded && userId) {
+        fetchUserData(false);
       }
-      return () => {
-        isMounted = false;
-      };
-    }, [userId, isLoaded, fetchUserData]),
+    }, [isLoaded, userId, fetchUserData]),
   );
 
   const handleOpenEditModal = () => {

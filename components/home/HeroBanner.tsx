@@ -55,7 +55,7 @@ export default function HeroBanner() {
 
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
       setCurrentIndex(nextIndex);
-    }, 50000);
+    }, 5000);
 
     return () => clearInterval(timer);
   }, [currentIndex]);
