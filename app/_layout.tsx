@@ -19,7 +19,6 @@ if (!isExpoGo) {
     const Notifications = require("expo-notifications");
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: false,
         shouldShowBanner: true,

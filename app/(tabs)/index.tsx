@@ -27,8 +27,9 @@ import NotificationBell from "@/components/home/notificationbell";
 import QuickActions from "@/components/home/QuickActions";
 import ServicesGrid from "@/components/home/ServicesGrid";
 import { useBookingStore } from "@/store/bookingStore";
+import { createClerkSupabaseClient } from "@/utils/supabase";
 import { supabase } from "@/utils/supabase";
-import { useUser } from "@clerk/expo";
+import { useAuth, useUser } from "@clerk/expo";
 import * as Location from "expo-location";
 import { useFocusEffect, useRouter } from "expo-router";
 
@@ -92,9 +93,16 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const { user } = useUser();
+  const { userId, getToken } = useAuth();
   const { addService } = useBookingStore();
 
   const isFetchingRef = useRef(false);
+
+  // 🚀 STABLE TOKEN REF: Unstable function ref se re-render loop ko prevent karega
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchLiveReviews = useCallback(async () => {
     if (isFetchingRef.current) return;
@@ -126,6 +134,22 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const fetchUnreadCount = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const db = createClerkSupabaseClient(() => getTokenRef.current());
+      const { count, error } = await db
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("clerk_user_id", userId)
+        .eq("read", false);
+
+      if (!error) setUnreadCount(count || 0);
+    } catch (err) {
+      console.log("❌ [Notifications] Unread count fetch error:", err);
+    }
+  }, [userId]); // 🚀 getToken dependency mein nahi hai, ref se access ho raha hai
+
   const fetchLocation = useCallback(async () => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -154,13 +178,14 @@ export default function HomeScreen() {
 
   // 2. Combined Refresh Function for Pull-to-Refresh
   const handleScreenRefresh = useCallback(async () => {
-    await Promise.all([fetchLiveReviews(), fetchLocation()]);
-  }, [fetchLiveReviews, fetchLocation]);
+    await Promise.all([fetchLiveReviews(), fetchLocation(), fetchUnreadCount()]);
+  }, [fetchLiveReviews, fetchLocation, fetchUnreadCount]);
 
   useFocusEffect(
     useCallback(() => {
       fetchLiveReviews();
-    }, [fetchLiveReviews]),
+      fetchUnreadCount();
+    }, [fetchLiveReviews, fetchUnreadCount]),
   );
 
   useEffect(() => {
@@ -204,7 +229,7 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity style={styles.notificationBtn}>
-            <NotificationBell count={0} />
+            <NotificationBell count={unreadCount} />
           </TouchableOpacity>
         </View>
 
