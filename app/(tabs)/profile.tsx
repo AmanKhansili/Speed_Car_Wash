@@ -6,18 +6,20 @@ import ProfileMenuList from "@/components/profile/ProfileMenuList";
 import ProfileStats from "@/components/profile/ProfileStats";
 import UserInfoCard from "@/components/profile/userInfoCard";
 import Colors from "@/constants/colors";
+import useUserContext from "@/context/userContext";
 import { createClerkSupabaseClient } from "@/utils/supabase";
 import {
   clearLocalUserData,
   getCachedProfileData,
   getCachedStatsData,
+  savePhoneLocally,
   saveProfileCache,
   saveStatsCache,
 } from "@/utils/userStorage";
 import { useAuth, useClerk, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -52,22 +54,11 @@ export default function ProfileScreen() {
   const { signOut } = useClerk();
   const { user, isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { userId, getToken, isLoaded: isAuthLoaded } = useAuth();
+  const { userData, updatePhone } = useUserContext();
   const isLoaded = isUserLoaded && isAuthLoaded;
 
-  // Stable token getter ref to prevent db client re-instantiation
-  const getTokenRef = useRef(getToken);
-  useEffect(() => {
-    getTokenRef.current = getToken;
-  }, [getToken]);
-
-  const db = useMemo(() => {
-    return createClerkSupabaseClient(async () => {
-      if (getTokenRef.current) {
-        return await getTokenRef.current();
-      }
-      return null;
-    });
-  }, []);
+  // Clean, Ref-Free client memoization
+  const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
   const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
@@ -90,11 +81,17 @@ export default function ProfileScreen() {
   const activePhoneNumber = useMemo(() => {
     return (
       supabaseProfile?.phone ||
+      userData?.mobileNumber ||
       user?.primaryPhoneNumber?.phoneNumber ||
       user?.phoneNumbers?.[0]?.phoneNumber ||
       ""
     );
-  }, [supabaseProfile?.phone, user?.primaryPhoneNumber?.phoneNumber, user?.phoneNumbers]);
+  }, [
+    supabaseProfile?.phone,
+    userData?.mobileNumber,
+    user?.primaryPhoneNumber?.phoneNumber,
+    user?.phoneNumbers,
+  ]);
 
   const fetchUserData = useCallback(
     async (forceRefresh = false) => {
@@ -107,8 +104,8 @@ export default function ProfileScreen() {
         const cachedProfile = await getCachedProfileData();
         const cachedStats = await getCachedStatsData();
 
-        if (cachedProfile) setSupabaseProfile(cachedProfile);
-        if (cachedStats) setStats(cachedStats);
+        if (cachedProfile && !supabaseProfile) setSupabaseProfile(cachedProfile);
+        if (cachedStats && !stats.totalBookings) setStats(cachedStats);
 
         if (!cachedProfile || !cachedStats) {
           setIsLoading(true);
@@ -120,7 +117,6 @@ export default function ProfileScreen() {
           return;
         }
 
-        // Fast Parallel Fetch
         const [profileRes, bookingsRes, subscriptionRes] = await Promise.all([
           db
             .from("profiles")
@@ -141,12 +137,11 @@ export default function ProfileScreen() {
             .maybeSingle(),
         ]);
 
-        if (profileRes.error) {
-          console.error("Error fetching profile:", profileRes.error);
-        } else if (profileRes.data) {
+        if (profileRes.data) {
           const profileData = profileRes.data;
           const finalPhone =
             profileData.phone ||
+            userData?.mobileNumber ||
             user?.primaryPhoneNumber?.phoneNumber ||
             user?.phoneNumbers?.[0]?.phoneNumber ||
             null;
@@ -166,38 +161,10 @@ export default function ProfileScreen() {
 
           setSupabaseProfile(formattedProfile);
           await saveProfileCache(formattedProfile);
-        } else {
-          const clerkPhone =
-            user?.primaryPhoneNumber?.phoneNumber || user?.phoneNumbers?.[0]?.phoneNumber || null;
-
-          const { data: newProfile, error: insertErr } = await db
-            .from("profiles")
-            .insert({
-              clerk_user_id: userId,
-              name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim(),
-              phone: clerkPhone,
-              updated_at: new Date().toISOString(),
-            })
-            .select("name, phone, created_at, membership_tier")
-            .single();
-
-          if (insertErr) {
-            console.error("Error creating profile:", insertErr);
-          } else if (newProfile) {
-            const formattedProfile = {
-              name: newProfile.name,
-              phone: newProfile.phone,
-              created_at: newProfile.created_at,
-              membership_tier: newProfile.membership_tier,
-            };
-            setSupabaseProfile(formattedProfile);
-            await saveProfileCache(formattedProfile);
-          }
+          if (finalPhone) await savePhoneLocally(finalPhone);
         }
 
-        if (bookingsRes.error) {
-          console.error("Error fetching bookings:", bookingsRes.error);
-        } else if (bookingsRes.data) {
+        if (bookingsRes.data) {
           const bookingsData = bookingsRes.data;
           const quickCards = bookingsData.filter(
             (b: any) =>
@@ -231,25 +198,19 @@ export default function ProfileScreen() {
           await saveStatsCache(freshStats);
         }
       } catch (error) {
-        console.error("Error fetching user profile data:", error);
+        console.error("Error fetching profile details:", error);
       } finally {
         setIsLoading(false);
       }
     },
-    [
-      userId,
-      db,
-      user?.primaryPhoneNumber?.phoneNumber,
-      user?.phoneNumbers,
-      user?.firstName,
-      user?.lastName,
-    ],
+    [userId, db, userData?.mobileNumber],
   );
 
+  // Trigger only on tab switch / screen focus
   useFocusEffect(
     useCallback(() => {
       if (isLoaded && userId) {
-        fetchUserData(false);
+        fetchUserData(true);
       }
     }, [isLoaded, userId, fetchUserData]),
   );
@@ -292,6 +253,9 @@ export default function ProfileScreen() {
 
       if (error) throw error;
 
+      await savePhoneLocally(formattedPhone);
+      if (updatePhone) await updatePhone(formattedPhone);
+
       const updatedProfile: SupabaseProfile = {
         name: fullName,
         created_at: supabaseProfile?.created_at || new Date().toISOString(),
@@ -320,7 +284,7 @@ export default function ProfileScreen() {
 
     const { error } = await db.from("bookings").delete().eq("id", cardId);
     if (error) {
-      fetchUserData(false);
+      fetchUserData(true);
       throw error;
     }
   };

@@ -1,11 +1,11 @@
+import RazorpayModal from "@/components/common/RazorpayModal";
 import Colors from "@/constants/colors";
 import useUser from "@/context/userContext";
 import { useBookingStore } from "@/store/bookingStore";
 import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth } from "@clerk/expo";
-import { useRazorpay } from "@codearcade/expo-razorpay";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -34,31 +34,25 @@ export default function BookingSummaryScreen() {
     preDiscount?: string;
   }>();
 
-  const [couponCode, setCouponCode] = useState("");
-  const [discount, setDiscount] = useState(0);
-  const [appliedCoupon, setAppliedCoupon] = useState("");
+  const initialCoupon = params.preAppliedCoupon || "";
+  const initialDiscount = Number(params.preDiscount) || 0;
+
+  const [couponCode, setCouponCode] = useState(initialCoupon);
+  const [discount, setDiscount] = useState(initialDiscount);
+  const [appliedCoupon, setAppliedCoupon] = useState(initialCoupon);
 
   const { selectedServices, getTotalPrice, clearCart } = useBookingStore();
-  const { openCheckout, RazorpayUI } = useRazorpay();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingCard, setIsSavingCard] = useState(false);
 
+  // Razorpay Checkout Modal State
+  const [isRazorpayVisible, setIsRazorpayVisible] = useState(false);
+  const [razorpayOptions, setRazorpayOptions] = useState<any>(null);
+  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+
   const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
-  // Sync pre-applied coupon from params (Quick-Book Flow)
-  useEffect(() => {
-    if (params.preAppliedCoupon) {
-      setAppliedCoupon(params.preAppliedCoupon);
-      setCouponCode(params.preAppliedCoupon);
-    }
-
-    if (params.preDiscount) {
-      setDiscount(Number(params.preDiscount) || 0);
-    }
-  }, [params.preAppliedCoupon, params.preDiscount]);
-
-  // Selected Car Metadata resolution
   const selectedCar =
     userData?.vehicles?.find((v) => v.id === params.vehicleId) || userData?.vehicles?.[0];
 
@@ -70,7 +64,6 @@ export default function BookingSummaryScreen() {
       }
     : null;
 
-  // Price Calculation
   const subTotal = getTotalPrice();
   const discountedSubTotal = Math.max(0, subTotal - discount);
   const gst = Math.round(discountedSubTotal * 0.18);
@@ -82,7 +75,6 @@ export default function BookingSummaryScreen() {
       Alert.alert("Error", "Please enter a coupon code");
       return;
     }
-
     if (appliedCoupon) {
       Alert.alert("Coupon Applied", "A coupon is already applied. Remove it first.");
       return;
@@ -126,37 +118,28 @@ export default function BookingSummaryScreen() {
     setIsSubmitting(true);
 
     try {
-      // ============================================
-      // 1. CREATE BOOKING
-      // ============================================
-
+      // 1. Create Booking
       const bookingPayload = {
         clerk_user_id: userId,
         user_id: userId,
         service_type: params.serviceType || "pickup",
         service_name: primaryServiceName,
-
         services_booked: {
           items: selectedServices,
           vehicle: carDetails,
           coupon: appliedCoupon || null,
           discount_amount: discount,
         },
-
         booking_date: params.date || new Date().toDateString(),
-
         scheduled_date: params.date
           ? new Date(params.date).toISOString()
           : new Date().toISOString(),
-
         phone: params.primaryPhone || "",
         primary_phone: params.primaryPhone || "",
         alt_phone: params.altPhone || "",
-
         address:
           params.addressText ||
           (params.serviceType === "pickup" ? "Pickup Location" : "Workshop Center"),
-
         amount: grandTotal,
         total_amount: grandTotal,
         status: "Pending",
@@ -168,216 +151,124 @@ export default function BookingSummaryScreen() {
         .select()
         .single();
 
-      if (bookingError) {
-        throw bookingError;
-      }
+      if (bookingError) throw bookingError;
 
-      const bookingId = booking.id;
+      setActiveBookingId(booking.id);
 
-      console.log("Booking created:", bookingId);
-
-      // ============================================
-      // 2. CREATE RAZORPAY ORDER
-      // ============================================
-
+      // 2. Create Razorpay Order
       const { data: orderResponse, error: orderError } = await clerkSupabase.functions.invoke(
         "create-razorpay-order",
         {
           body: {
-            bookingIds: [bookingId],
+            bookingIds: [booking.id],
             amount: grandTotal,
             clerkUserId: userId,
           },
         },
       );
 
-      // DEBUG LOGS
-      console.log("Create Razorpay Order Response:", orderResponse);
-
-      console.log("Create Razorpay Order Error:", orderError);
-
-      // IMPORTANT:
-      // Edge Function response structure is:
-      //
-      // {
-      //   success: true,
-      //   order: {
-      //      id: "order_xxxxx",
-      //      amount: 12345,
-      //      currency: "INR"
-      //   },
-      //   paymentRecord: {...}
-      // }
-      //
-      // So Razorpay order is inside orderResponse.order
-
       if (orderError || !orderResponse?.order?.id) {
-        console.error("Razorpay order creation failed:", {
-          orderError,
-          orderResponse,
-        });
-
         throw new Error(orderError?.message || "Order creation failed");
       }
 
       const razorpayOrder = orderResponse.order;
 
-      console.log("Razorpay Order ID:", razorpayOrder.id);
-
-      console.log("Razorpay Order Amount:", razorpayOrder.amount);
-
-      console.log("Razorpay Order Currency:", razorpayOrder.currency);
-
-      // ============================================
-      // 3. OPEN RAZORPAY CHECKOUT
-      // ============================================
-
-      openCheckout(
-        {
-          key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TPXivOh8YV97Lz",
-
-          // Use actual Razorpay order amount
-          amount: razorpayOrder.amount,
-
-          currency: razorpayOrder.currency || "INR",
-
-          // IMPORTANT:
-          // Use orderResponse.order.id
-          order_id: razorpayOrder.id,
-
-          name: "Speed Car Wash",
-
-          description: "Premium Car Wash & Detailing",
-
-          prefill: {
-            name: "Customer Name",
-            email: "customer@example.com",
-            contact: params.primaryPhone || "9999999999",
-          },
-
-          theme: {
-            color: Colors.primary || "#2563EB",
-          },
+      // 3. Open Modal
+      setRazorpayOptions({
+        key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TPXivOh8YV97Lz",
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency || "INR",
+        order_id: razorpayOrder.id,
+        name: "Speed Car Wash",
+        description: "Premium Car Wash & Detailing",
+        prefill: {
+          name: "Customer Name",
+          email: "customer@example.com",
+          contact: params.primaryPhone || "9999999999",
         },
-
-        {
-          // ========================================
-          // PAYMENT SUCCESS
-          // ========================================
-
-          onSuccess: async (data) => {
-            console.log("Razorpay Payment Success:", data);
-
-            await clerkSupabase
-              .from("bookings")
-              .update({
-                status: "Confirmed",
-                payment_id: data.razorpay_payment_id,
-              })
-              .eq("id", bookingId);
-
-            setIsSubmitting(false);
-
-            Alert.alert(
-              "Payment Successful 🎉",
-              `Your booking is confirmed.\nRef ID: ${data.razorpay_payment_id}`,
-              [
-                {
-                  text: "View Bookings",
-                  onPress: () => {
-                    clearCart();
-
-                    router.replace("/(tabs)/bookings" as any);
-                  },
-                },
-              ],
-            );
-          },
-
-          // ========================================
-          // PAYMENT FAILED
-          // ========================================
-
-          onFailure: async (error) => {
-            console.error("Razorpay Payment Failed:", error);
-
-            await clerkSupabase
-              .from("bookings")
-              .update({
-                status: "Failed",
-              })
-              .eq("id", bookingId);
-
-            setIsSubmitting(false);
-
-            const errorMsg =
-              error?.description || error?.reason || "Payment could not be completed";
-
-            Alert.alert("Payment Failed", `Reason: ${errorMsg}`);
-          },
-
-          // ========================================
-          // CHECKOUT CLOSED
-          // ========================================
-
-          onClose: () => {
-            console.log("Razorpay checkout closed");
-
-            setIsSubmitting(false);
-          },
+        theme: {
+          color: Colors.primary || "#2563EB",
         },
-      );
+      });
+
+      setIsSubmitting(false);
+      setIsRazorpayVisible(true);
     } catch (err: any) {
       setIsSubmitting(false);
-
-      console.error("Payment and booking error:", err);
-
       Alert.alert("Error", err?.message || "Something went wrong, please try again.");
     }
   };
 
-  // 2. SAVE AS QUICK-BOOK CARD (STATUS: Saved)
+  const handlePaymentSuccess = async (data: any) => {
+    setIsRazorpayVisible(false);
+    setIsSubmitting(true);
+
+    if (activeBookingId) {
+      await clerkSupabase
+        .from("bookings")
+        .update({
+          status: "Confirmed",
+          payment_id: data.razorpay_payment_id,
+        })
+        .eq("id", activeBookingId);
+    }
+
+    setIsSubmitting(false);
+    clearCart();
+
+    Alert.alert(
+      "Payment Successful 🎉",
+      `Your booking is confirmed.\nRef ID: ${data.razorpay_payment_id}`,
+      [
+        {
+          text: "View Bookings",
+          onPress: () => router.replace("/(tabs)/bookings" as any),
+        },
+      ],
+    );
+  };
+
+  const handlePaymentFailure = async (error: any) => {
+    setIsRazorpayVisible(false);
+    if (activeBookingId) {
+      await clerkSupabase.from("bookings").update({ status: "Failed" }).eq("id", activeBookingId);
+    }
+    Alert.alert("Payment Failed", `Reason: ${error?.description || "Payment cancelled/failed"}`);
+  };
+
   const handleSaveConfiguration = async () => {
     if (grandTotal <= 0) {
       Alert.alert("Error", "Your cart is empty!");
       return;
     }
-
     if (!userId) {
       Alert.alert("Error", "Please log in again to continue.");
       return;
     }
 
     setIsSavingCard(true);
-
     try {
       const quickCardPayload = {
         clerk_user_id: userId,
         user_id: userId,
         service_type: params.serviceType || "pickup",
         service_name: primaryServiceName,
-
         services_booked: {
           items: selectedServices,
           vehicle: carDetails,
           coupon: appliedCoupon || null,
           discount_amount: discount,
         },
-
         booking_date: params.date || "Template",
-
         scheduled_date: params.date
           ? new Date(params.date).toISOString()
           : new Date().toISOString(),
-
         phone: params.primaryPhone || "",
         primary_phone: params.primaryPhone || "",
         alt_phone: params.altPhone || "",
-
         address:
           params.addressText ||
           (params.serviceType === "pickup" ? "Saved Pickup Location" : "Service Hub"),
-
         amount: grandTotal,
         total_amount: grandTotal,
         status: "Saved",
@@ -387,28 +278,21 @@ export default function BookingSummaryScreen() {
         .from("bookings")
         .insert([quickCardPayload]);
 
-      if (bookingError) {
-        throw bookingError;
-      }
+      if (bookingError) throw bookingError;
 
       setIsSavingCard(false);
-
       Alert.alert("Card Saved! 🎉", "Your configuration is saved in Quick Actions on Profile.", [
         {
           text: "Go to Profile",
           onPress: () => {
             clearCart();
-
             router.replace("/(tabs)/profile" as any);
           },
         },
       ]);
     } catch (err: any) {
       setIsSavingCard(false);
-
       Alert.alert("Error", err?.message || "Something went wrong.");
-
-      console.error(err);
     }
   };
 
@@ -421,7 +305,6 @@ export default function BookingSummaryScreen() {
           {selectedServices.map((service) => (
             <View key={service.id} style={styles.row}>
               <Text style={styles.serviceTitle}>{service.title}</Text>
-
               <Text style={styles.servicePrice}>₹{service.price}</Text>
             </View>
           ))}
@@ -431,26 +314,22 @@ export default function BookingSummaryScreen() {
           {carDetails && (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Vehicle:</Text>
-
               <Text style={styles.infoValue}>{carDetails.name}</Text>
             </View>
           )}
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Type:</Text>
-
             <Text style={styles.infoValue}>{params.serviceType?.toUpperCase()}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Date & Time:</Text>
-
             <Text style={styles.infoValue}>{params.date || "Not Selected"}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Location:</Text>
-
             <Text style={styles.infoValue} numberOfLines={2}>
               {params.addressText || "Workshop Center"}
             </Text>
@@ -462,12 +341,7 @@ export default function BookingSummaryScreen() {
             <TextInput
               style={[
                 styles.couponInput,
-                appliedCoupon
-                  ? {
-                      backgroundColor: "#F3F4F6",
-                      color: "#6B7280",
-                    }
-                  : null,
+                appliedCoupon ? { backgroundColor: "#F3F4F6", color: "#6B7280" } : null,
               ]}
               placeholder="Enter Coupon (e.g. FIRST50)"
               placeholderTextColor="#9CA3AF"
@@ -498,7 +372,6 @@ export default function BookingSummaryScreen() {
 
           <View style={styles.row}>
             <Text style={styles.infoLabel}>Subtotal</Text>
-
             <Text style={styles.servicePrice}>₹{subTotal}</Text>
           </View>
 
@@ -507,20 +380,17 @@ export default function BookingSummaryScreen() {
               <Text style={[styles.infoLabel, { color: "#16A34A" }]}>
                 Discount ({appliedCoupon})
               </Text>
-
               <Text style={[styles.servicePrice, { color: "#16A34A" }]}>-₹{discount}</Text>
             </View>
           )}
 
           <View style={styles.row}>
             <Text style={styles.infoLabel}>GST (18%)</Text>
-
             <Text style={styles.servicePrice}>₹{gst}</Text>
           </View>
 
           <View style={styles.row}>
             <Text style={styles.infoLabel}>Platform Fee</Text>
-
             <Text style={styles.servicePrice}>₹{platformFee}</Text>
           </View>
 
@@ -528,7 +398,6 @@ export default function BookingSummaryScreen() {
 
           <View style={styles.row}>
             <Text style={styles.totalLabel}>Grand Total</Text>
-
             <Text style={styles.totalValue}>₹{grandTotal}</Text>
           </View>
         </View>
@@ -562,29 +431,22 @@ export default function BookingSummaryScreen() {
         </TouchableOpacity>
       </View>
 
-      {RazorpayUI}
+      {/* 🚀 Reliable Direct Native WebView Modal */}
+      <RazorpayModal
+        visible={isRazorpayVisible}
+        options={razorpayOptions}
+        onSuccess={handlePaymentSuccess}
+        onFailure={handlePaymentFailure}
+        onClose={() => setIsRazorpayVisible(false)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background || "#F9FAFB",
-  },
-
-  content: {
-    padding: 16,
-    paddingBottom: 160,
-  },
-
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: Colors.text || "#111827",
-    marginBottom: 20,
-  },
-
+  container: { flex: 1, backgroundColor: Colors.background || "#F9FAFB" },
+  content: { padding: 16, paddingBottom: 160 },
+  title: { fontSize: 24, fontWeight: "bold", color: Colors.text || "#111827", marginBottom: 20 },
   card: {
     backgroundColor: Colors.surface || "#FFF",
     padding: 20,
@@ -592,24 +454,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border || "#E5E7EB",
   },
-
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-
-  infoLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary || "#6B7280",
-  },
-
+  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
+  infoRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  infoLabel: { fontSize: 14, color: Colors.textSecondary || "#6B7280" },
   infoValue: {
     fontSize: 14,
     color: Colors.text || "#111827",
@@ -617,30 +464,10 @@ const styles = StyleSheet.create({
     maxWidth: "60%",
     textAlign: "right",
   },
-
-  serviceTitle: {
-    fontSize: 16,
-    color: Colors.textSecondary || "#4B5563",
-  },
-
-  servicePrice: {
-    fontSize: 16,
-    color: Colors.text || "#111827",
-    fontWeight: "600",
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border || "#E5E7EB",
-    marginVertical: 12,
-  },
-
-  couponSection: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-  },
-
+  serviceTitle: { fontSize: 16, color: Colors.textSecondary || "#4B5563" },
+  servicePrice: { fontSize: 16, color: Colors.text || "#111827", fontWeight: "600" },
+  divider: { height: 1, backgroundColor: Colors.border || "#E5E7EB", marginVertical: 12 },
+  couponSection: { flexDirection: "row", gap: 8, marginBottom: 8 },
   couponInput: {
     flex: 1,
     backgroundColor: "#F9FAFB",
@@ -652,52 +479,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#111827",
   },
-
   applyBtn: {
     backgroundColor: Colors.primary || "#2563EB",
     justifyContent: "center",
     paddingHorizontal: 16,
     borderRadius: 8,
   },
-
-  applyBtnText: {
-    color: "#FFF",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-
+  applyBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
   removeBtn: {
     backgroundColor: "#FEE2E2",
     justifyContent: "center",
     paddingHorizontal: 16,
     borderRadius: 8,
   },
-
-  removeBtnText: {
-    color: "#DC2626",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-
-  appliedText: {
-    fontSize: 12,
-    color: "#16A34A",
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: Colors.text || "#111827",
-  },
-
-  totalValue: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: Colors.primary || "#2563EB",
-  },
-
+  removeBtnText: { color: "#DC2626", fontWeight: "700", fontSize: 14 },
+  appliedText: { fontSize: 12, color: "#16A34A", fontWeight: "600", marginBottom: 8 },
+  totalLabel: { fontSize: 18, fontWeight: "bold", color: Colors.text || "#111827" },
+  totalValue: { fontSize: 20, fontWeight: "900", color: Colors.primary || "#2563EB" },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -709,20 +507,13 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     gap: 12,
   },
-
   confirmBtn: {
     backgroundColor: Colors.primary || "#2563EB",
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
   },
-
-  confirmBtnText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-
+  confirmBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
   saveTemplateBtn: {
     backgroundColor: "#EFF6FF",
     padding: 14,
@@ -731,10 +522,5 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary || "#2563EB",
     alignItems: "center",
   },
-
-  saveTemplateBtnText: {
-    color: Colors.primary || "#2563EB",
-    fontSize: 15,
-    fontWeight: "700",
-  },
+  saveTemplateBtnText: { color: Colors.primary || "#2563EB", fontSize: 15, fontWeight: "700" },
 });
