@@ -13,7 +13,7 @@ const Colors = {
 
   border: "#F3F4F6",
 
-  shadow: "#5D3FD3",
+  shadow: "#5D3FD3",               
 
   success: "#10B981",
   warning: "#FBBF24",

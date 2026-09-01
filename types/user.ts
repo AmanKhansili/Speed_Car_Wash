@@ -20,8 +20,12 @@ export type NewVehicle = Omit<Vehicle, "id">;
 
 export interface LocalUserData {
   mobileNumber: string;
+  fullName?: string;
   location: UserLocation | null;
   vehicles: Vehicle[];
+  primaryEmailAddress?: {
+    emailAddress: string;
+  };
   selectedVehicleId: string | null;
   lastUpdated: number;
 }
