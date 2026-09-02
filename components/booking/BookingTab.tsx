@@ -5,7 +5,7 @@ import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -31,7 +31,13 @@ export interface BookingDisplayItem {
   phone: string;
   paymentId?: string;
   vehicleName?: string;
-  status: "Confirmed" | "Pending" | "Cancelled" | "Completed" | "Failed" | string;
+  status:
+    | "Confirmed"
+    | "Pending"
+    | "Cancelled"
+    | "Completed"
+    | "Failed"
+    | string;
   type: "upcoming" | "past";
 }
 
@@ -40,31 +46,41 @@ export default function BookingTabs() {
   const { user } = useUser();
   const { userId, getToken } = useAuth();
 
-  // Compiler-safe client
-  const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
+  // Stable token getter: isolates Clerk's dynamic token updates from re-render chains
+    const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [bookings, setBookings] = useState<BookingDisplayItem[]>([]);
-  const [selectedInvoice, setSelectedInvoice] = useState<BookingDisplayItem | null>(null);
-  const [ratingTarget, setRatingTarget] = useState<BookingDisplayItem | null>(null);
+  const [selectedInvoice, setSelectedInvoice] =
+    useState<BookingDisplayItem | null>(null);
+  const [ratingTarget, setRatingTarget] = useState<BookingDisplayItem | null>(
+    null,
+  );
+
+  const isFetchingRef = useRef(false);
 
   // Retry payment state
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [isRazorpayVisible, setIsRazorpayVisible] = useState(false);
   const [razorpayOptions, setRazorpayOptions] = useState<any>(null);
-  const [activeRetryBookingId, setActiveRetryBookingId] = useState<string | null>(null);
+  const [activeRetryBookingId, setActiveRetryBookingId] = useState<
+    string | null
+  >(null);
 
-  const fetchSupabaseBookings = useCallback(async () => {
-    if (!userId) {
-      return;
-    }
+  // STABLE: Dependencies DO NOT include getToken or any dynamic callbacks
+  const loadData = useCallback(async () => {
+    if (!userId || isFetchingRef.current) return;
+    isFetchingRef.current = true;
 
     try {
-      const { data, error } = await clerkSupabase
+      const client = createClerkSupabaseClient(() => getTokenRef.current());
+      const { data, error } = await client
         .from("bookings")
         .select("*")
         .or(`clerk_user_id.eq.${userId},user_id.eq.${userId}`)
@@ -77,7 +93,9 @@ export default function BookingTabs() {
         const formattedBookings: BookingDisplayItem[] = data.map((item: any) => {
           const statusLower = item.status?.toLowerCase() || "";
           const isPast =
-            statusLower === "completed" || statusLower === "cancelled" || statusLower === "failed";
+            statusLower === "completed" ||
+            statusLower === "cancelled" ||
+            statusLower === "failed";
 
           const title =
             item.service_name ||
@@ -96,9 +114,14 @@ export default function BookingTabs() {
           const displayPhone = item.primary_phone || item.phone || "N/A";
           const displayAddress =
             item.address ||
-            (item.service_type === "pickup" ? "Pickup Requested" : "Workshop Center");
+            (item.service_type === "pickup"
+              ? "Pickup Requested"
+              : "Workshop Center");
 
-          const vehicleName = item.services_booked?.vehicle?.name || item.vehicle_name || "Vehicle";
+          const vehicleName =
+            item.services_booked?.vehicle?.name ||
+            item.vehicle_name ||
+            "Vehicle";
 
           return {
             id: item.id,
@@ -121,74 +144,73 @@ export default function BookingTabs() {
       console.log("❌ [Bookings] Failed to fetch bookings from Supabase", error);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
-  }, [clerkSupabase, userId]);
+  }, [userId]);
 
+  // STRICT MOUNT: Executes once when userId is present, breaks infinite loop completely
   useEffect(() => {
-    let isMounted = true;
+    let ignore = false;
 
-    const loadInitialData = async () => {
+    const runInit = async () => {
       if (!userId) {
-        if (isMounted) setLoading(false);
+        if (!ignore) setLoading(false);
         return;
       }
-      await fetchSupabaseBookings();
+      await loadData();
     };
 
-    void loadInitialData();
+    runInit();
 
     return () => {
-      isMounted = false;
-      if (timerRef.current) clearTimeout(timerRef.current);
+      ignore = true;
     };
-  }, [userId, fetchSupabaseBookings]);
+  }, [userId, loadData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setRefreshing(false), 3500);
-
-    await fetchSupabaseBookings();
-
-    if (timerRef.current) clearTimeout(timerRef.current);
+    await loadData();
     setRefreshing(false);
-  }, [fetchSupabaseBookings]);
+  }, [loadData]);
 
-  // Retry / Pay Now Logic
   const handleRetryPayment = async (booking: BookingDisplayItem) => {
     if (!userId) return;
 
     try {
       setRetryingId(booking.id);
+      const client = createClerkSupabaseClient(() => getTokenRef.current());
 
-      const { data: orderResponse, error: orderError } = await clerkSupabase.functions.invoke(
-        "create-razorpay-order",
-        {
+      const { data: orderResponse, error: orderError } =
+        await client.functions.invoke("create-razorpay-order", {
           body: {
             bookingIds: [booking.id],
             amount: booking.numericAmount,
             clerkUserId: userId,
           },
-        },
-      );
+        });
 
       if (orderError || !orderResponse?.order?.id) {
-        throw new Error(orderError?.message || "Could not initialize payment order.");
+        throw new Error(
+          orderError?.message || "Could not initialize payment order.",
+        );
       }
 
       const razorpayOrder = orderResponse.order;
 
       setRazorpayOptions({
-        key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TPXivOh8YV97Lz",
+        key:
+          process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TPXivOh8YV97Lz",
         amount: razorpayOrder.amount,
         currency: razorpayOrder.currency || "INR",
         order_id: razorpayOrder.id,
         name: "Speed Car Wash",
         description: `Payment for ${booking.title}`,
         prefill: {
-          name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "Customer",
-          email: user?.primaryEmailAddress?.emailAddress || "customer@example.com",
+          name:
+            `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+            "Customer",
+          email:
+            user?.primaryEmailAddress?.emailAddress || "customer@example.com",
           contact: booking.phone !== "N/A" ? booking.phone : "9999999999",
         },
         theme: {
@@ -199,7 +221,10 @@ export default function BookingTabs() {
       setActiveRetryBookingId(booking.id);
       setIsRazorpayVisible(true);
     } catch (err: any) {
-      Alert.alert("Payment Error", err?.message || "Something went wrong. Please try again.");
+      Alert.alert(
+        "Payment Error",
+        err?.message || "Something went wrong. Please try again.",
+      );
     } finally {
       setRetryingId(null);
     }
@@ -212,7 +237,8 @@ export default function BookingTabs() {
 
     try {
       setLoading(true);
-      await clerkSupabase
+      const client = createClerkSupabaseClient(() => getTokenRef.current());
+      await client
         .from("bookings")
         .update({
           status: "Confirmed",
@@ -221,7 +247,7 @@ export default function BookingTabs() {
         .eq("id", activeRetryBookingId);
 
       Alert.alert("Payment Successful 🎉", "Your booking has been confirmed!");
-      await fetchSupabaseBookings();
+      await loadData();
     } catch (err) {
       console.error("Failed to update status after payment:", err);
     } finally {
@@ -233,42 +259,53 @@ export default function BookingTabs() {
   const handlePaymentFailure = async (error: any) => {
     setIsRazorpayVisible(false);
     setActiveRetryBookingId(null);
-    Alert.alert("Payment Incomplete", error?.description || "Payment was not completed.");
+    Alert.alert(
+      "Payment Incomplete",
+      error?.description || "Payment was not completed.",
+    );
   };
 
   const handleCancel = async (id: string) => {
-    Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
-      { text: "No", style: "cancel" },
-      {
-        text: "Yes, Cancel",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const { error } = await clerkSupabase
-              .from("bookings")
-              .update({ status: "Cancelled" })
-              .eq("id", id);
+    Alert.alert(
+      "Cancel Booking",
+      "Are you sure you want to cancel this booking?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const client = createClerkSupabaseClient(() => getTokenRef.current());
+              const { error } = await client
+                .from("bookings")
+                .update({ status: "Cancelled" })
+                .eq("id", id);
 
-            if (error) throw error;
+              if (error) throw error;
 
-            setBookings((prev) =>
-              prev.map((item) =>
-                item.id === id ? { ...item, status: "Cancelled", type: "past" } : item,
-              ),
-            );
-          } catch {
-            Alert.alert("Error", "Could not cancel booking");
-          }
+              setBookings((prev) =>
+                prev.map((item) =>
+                  item.id === id
+                    ? { ...item, status: "Cancelled", type: "past" }
+                    : item,
+                ),
+              );
+            } catch {
+              Alert.alert("Error", "Could not cancel booking");
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const handleSubmitReview = async (rating: number, comment: string) => {
     if (!ratingTarget || !userId) return;
 
     try {
-      const { data: profileData } = await clerkSupabase
+      const client = createClerkSupabaseClient(() => getTokenRef.current());
+      const { data: profileData } = await client
         .from("profiles")
         .select("name")
         .eq("clerk_user_id", userId)
@@ -280,7 +317,7 @@ export default function BookingTabs() {
         [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
         "Verified Customer";
 
-      const { error } = await clerkSupabase.from("reviews").insert({
+      const { error } = await client.from("reviews").insert({
         booking_id: ratingTarget.id,
         clerk_user_id: userId,
         user_name: authenticName,
@@ -298,7 +335,10 @@ export default function BookingTabs() {
       );
     } catch (err) {
       console.error("Review Submit Error:", err);
-      Alert.alert("Submission Failed", "Could not save your review right now. Please try again.");
+      Alert.alert(
+        "Submission Failed",
+        "Could not save your review right now. Please try again.",
+      );
     }
   };
 
@@ -313,7 +353,8 @@ export default function BookingTabs() {
 
   const renderBookingCard = ({ item }: { item: BookingDisplayItem }) => {
     const statusLower = item.status.toLowerCase();
-    const isPendingOrFailed = statusLower === "pending" || statusLower === "failed";
+    const isPendingOrFailed =
+      statusLower === "pending" || statusLower === "failed";
     const isCompleted = statusLower === "completed";
     const isConfirmed = statusLower === "confirmed";
 
@@ -366,7 +407,6 @@ export default function BookingTabs() {
           </View>
         </View>
 
-        {/* Card Actions */}
         <View style={styles.cardActions}>
           {isPendingOrFailed ? (
             <TouchableOpacity
@@ -380,7 +420,9 @@ export default function BookingTabs() {
               ) : (
                 <>
                   <Ionicons name="card-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.retryPayBtnText}>Pay {item.price} & Confirm</Text>
+                  <Text style={styles.retryPayBtnText}>
+                    Pay {item.price} & Confirm
+                  </Text>
                 </>
               )}
             </TouchableOpacity>
@@ -407,7 +449,9 @@ export default function BookingTabs() {
                   onPress={() => setRatingTarget(item)}
                 >
                   <Ionicons name="star" size={15} color="#D97706" />
-                  <Text style={[styles.invoiceBtnText, { color: "#D97706" }]}>Rate Service</Text>
+                  <Text style={[styles.invoiceBtnText, { color: "#D97706" }]}>
+                    Rate Service
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -431,21 +475,37 @@ export default function BookingTabs() {
     <View style={styles.container}>
       <View style={styles.tabHeader}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
+          style={[
+            styles.tabButton,
+            activeTab === "upcoming" && styles.activeTabButton,
+          ]}
           onPress={() => setActiveTab("upcoming")}
           activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === "upcoming" && styles.activeTabText]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "upcoming" && styles.activeTabText,
+            ]}
+          >
             Upcoming
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === "past" && styles.activeTabButton]}
+          style={[
+            styles.tabButton,
+            activeTab === "past" && styles.activeTabButton,
+          ]}
           onPress={() => setActiveTab("past")}
           activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === "past" && styles.activeTabText]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "past" && styles.activeTabText,
+            ]}
+          >
             Past & Cancelled
           </Text>
         </TouchableOpacity>
@@ -482,18 +542,22 @@ export default function BookingTabs() {
         ListEmptyComponent={() => (
           <View style={styles.emptyBox}>
             {loading && !refreshing ? (
-              <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
+              <ActivityIndicator
+                size="large"
+                color={Colors.primary || "#2563EB"}
+              />
             ) : (
               <>
                 <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
-                <Text style={styles.emptyText}>No {activeTab} bookings found.</Text>
+                <Text style={styles.emptyText}>
+                  No {activeTab} bookings found.
+                </Text>
               </>
             )}
           </View>
         )}
       />
 
-      {/* Digital Receipt Modal */}
       <Modal
         visible={!!selectedInvoice}
         animationType="slide"
@@ -529,19 +593,30 @@ export default function BookingTabs() {
                   <View style={styles.invoiceMeta}>
                     <View style={styles.metaRow}>
                       <Text style={styles.metaLabel}>Date:</Text>
-                      <Text style={styles.metaValue}>{selectedInvoice.date}</Text>
+                      <Text style={styles.metaValue}>
+                        {selectedInvoice.date}
+                      </Text>
                     </View>
                     <View style={styles.metaRow}>
                       <Text style={styles.metaLabel}>Vehicle:</Text>
-                      <Text style={styles.metaValue}>{selectedInvoice.vehicleName}</Text>
+                      <Text style={styles.metaValue}>
+                        {selectedInvoice.vehicleName}
+                      </Text>
                     </View>
                     <View style={styles.metaRow}>
                       <Text style={styles.metaLabel}>Payment Ref:</Text>
-                      <Text style={styles.metaValue}>{selectedInvoice.paymentId}</Text>
+                      <Text style={styles.metaValue}>
+                        {selectedInvoice.paymentId}
+                      </Text>
                     </View>
                     <View style={styles.metaRow}>
                       <Text style={styles.metaLabel}>Status:</Text>
-                      <Text style={[styles.metaValue, { color: "#16A34A", fontWeight: "700" }]}>
+                      <Text
+                        style={[
+                          styles.metaValue,
+                          { color: "#16A34A", fontWeight: "700" },
+                        ]}
+                      >
                         {selectedInvoice.status}
                       </Text>
                     </View>
@@ -551,9 +626,14 @@ export default function BookingTabs() {
                     <Text style={styles.tableHead}>ITEM BREAKDOWN</Text>
 
                     <View style={styles.tableRow}>
-                      <Text style={styles.tableName}>{selectedInvoice.title}</Text>
+                      <Text style={styles.tableName}>
+                        {selectedInvoice.title}
+                      </Text>
                       <Text style={styles.tablePrice}>
-                        ₹{Math.round((selectedInvoice.numericAmount || 499) / 1.18)}
+                        ₹
+                        {Math.round(
+                          (selectedInvoice.numericAmount || 499) / 1.18,
+                        )}
                       </Text>
                     </View>
 
@@ -562,7 +642,9 @@ export default function BookingTabs() {
                       <Text style={styles.tablePrice}>
                         ₹
                         {(selectedInvoice.numericAmount || 499) -
-                          Math.round((selectedInvoice.numericAmount || 499) / 1.18)}
+                          Math.round(
+                            (selectedInvoice.numericAmount || 499) / 1.18,
+                          )}
                       </Text>
                     </View>
 
@@ -574,7 +656,10 @@ export default function BookingTabs() {
                     </View>
                   </View>
 
-                  <TouchableOpacity style={styles.doneBtn} onPress={() => setSelectedInvoice(null)}>
+                  <TouchableOpacity
+                    style={styles.doneBtn}
+                    onPress={() => setSelectedInvoice(null)}
+                  >
                     <Text style={styles.doneBtnText}>Close Receipt</Text>
                   </TouchableOpacity>
                 </ScrollView>
@@ -584,7 +669,6 @@ export default function BookingTabs() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Rating & Review Modal */}
       <RatingModal
         visible={!!ratingTarget}
         serviceTitle={ratingTarget?.title || "Car Wash Service"}
@@ -592,7 +676,6 @@ export default function BookingTabs() {
         onSubmit={handleSubmitReview}
       />
 
-      {/* Retry Checkout Modal */}
       <RazorpayModal
         visible={isRazorpayVisible}
         options={razorpayOptions}
@@ -642,7 +725,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
-  addBookingBtnText: { color: "#FFFFFF", fontWeight: "700", marginLeft: 6, fontSize: 14 },
+  addBookingBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    marginLeft: 6,
+    fontSize: 14,
+  },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
@@ -652,11 +740,26 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   cardHeader: { flexDirection: "row", alignItems: "center" },
-  cardImage: { width: 50, height: 50, borderRadius: 10, backgroundColor: "#F1F5F9" },
+  cardImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+  },
   headerInfo: { flex: 1, marginLeft: 12 },
   cardTitle: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
-  cardPrice: { fontSize: 14, fontWeight: "600", color: Colors.primary || "#2563EB", marginTop: 2 },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "#F1F5F9" },
+  cardPrice: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.primary || "#2563EB",
+    marginTop: 2,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#F1F5F9",
+  },
   badgeText: { fontSize: 11, fontWeight: "700", color: "#475569" },
   confirmedBadge: { backgroundColor: "#DCFCE7" },
   pendingBadge: { backgroundColor: "#FEF3C7" },
@@ -698,7 +801,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#BFDBFE",
   },
-  invoiceBtnText: { color: Colors.primary || "#2563EB", fontSize: 13, fontWeight: "600" },
+  invoiceBtnText: {
+    color: Colors.primary || "#2563EB",
+    fontSize: 13,
+    fontWeight: "600",
+  },
   cancelBtn: {
     flex: 1,
     paddingVertical: 9,
@@ -709,7 +816,11 @@ const styles = StyleSheet.create({
     borderColor: "#EF4444",
   },
   cancelBtnText: { color: "#EF4444", fontSize: 13, fontWeight: "600" },
-  emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: 40 },
+  emptyBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
   emptyText: { marginTop: 8, color: "#94A3B8", fontSize: 14 },
   modalOverlay: {
     flex: 1,
@@ -729,23 +840,60 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  invoiceCompany: { fontSize: 18, fontWeight: "800", color: Colors.primary || "#2563EB" },
+  invoiceCompany: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: Colors.primary || "#2563EB",
+  },
   invoiceSub: { fontSize: 12, color: "#64748B", marginTop: 2 },
-  invoiceRefBox: { backgroundColor: "#F8FAFC", padding: 12, borderRadius: 10, marginBottom: 14 },
+  invoiceRefBox: {
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
   invoiceRefLabel: { fontSize: 10, fontWeight: "700", color: "#94A3B8" },
-  invoiceRefValue: { fontSize: 15, fontWeight: "700", color: "#0F172A", marginTop: 2 },
+  invoiceRefValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginTop: 2,
+  },
   invoiceMeta: { gap: 8, marginBottom: 16 },
   metaRow: { flexDirection: "row", justifyContent: "space-between" },
   metaLabel: { fontSize: 13, color: "#64748B" },
   metaValue: { fontSize: 13, color: "#0F172A", fontWeight: "600" },
-  billTable: { borderTopWidth: 1, borderTopColor: "#E2E8F0", paddingTop: 14, marginBottom: 20 },
-  tableHead: { fontSize: 11, fontWeight: "700", color: "#94A3B8", marginBottom: 8 },
-  tableRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
+  billTable: {
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    paddingTop: 14,
+    marginBottom: 20,
+  },
+  tableHead: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+    marginBottom: 8,
+  },
+  tableRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
   tableName: { fontSize: 13, color: "#334155" },
   tablePrice: { fontSize: 13, fontWeight: "600", color: "#0F172A" },
-  totalRow: { borderTopWidth: 1, borderTopColor: "#E2E8F0", marginTop: 8, paddingTop: 10 },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    marginTop: 8,
+    paddingTop: 10,
+  },
   totalLabel: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
-  totalAmount: { fontSize: 17, fontWeight: "800", color: Colors.primary || "#2563EB" },
+  totalAmount: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: Colors.primary || "#2563EB",
+  },
   doneBtn: {
     backgroundColor: Colors.primary || "#2563EB",
     paddingVertical: 13,

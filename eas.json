@@ -7,13 +7,16 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      // "ios": {
+      //   "simulator": true // only when you have macOS 🫡
+      // },
       "env": {
         "EXPO_PUBLIC_USE_DEV_CLIENT": "true"
       }
     },
     "preview": {
       "distribution": "internal",
-       "android": {
+      "android": {
         "buildType": "apk"
       }
     },

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "car-wash-app",
+    "name": "speed-car-wash",
     "slug": "car-wash-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.amanjeetsingh.carwashapp"
     },
     "android": {
       "adaptiveIcon": {
@@ -48,6 +49,12 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#ffffff"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to set your pickup address."
         }
       ]
     ],
