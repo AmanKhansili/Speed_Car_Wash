@@ -1,10 +1,11 @@
 import RatingModal from "@/components/booking/RatingModal";
+import RazorpayModal from "@/components/common/RazorpayModal";
 import Colors from "@/constants/colors";
 import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -39,12 +40,8 @@ export default function BookingTabs() {
   const { user } = useUser();
   const { userId, getToken } = useAuth();
 
-  const getTokenRef = useRef(getToken);
-  useEffect(() => {
-    getTokenRef.current = getToken;
-  }, [getToken]);
-
-  const clerkSupabase = useMemo(() => createClerkSupabaseClient(() => getTokenRef.current()), []);
+  // Compiler-safe client
+  const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [loading, setLoading] = useState(true);
@@ -55,9 +52,14 @@ export default function BookingTabs() {
   const [selectedInvoice, setSelectedInvoice] = useState<BookingDisplayItem | null>(null);
   const [ratingTarget, setRatingTarget] = useState<BookingDisplayItem | null>(null);
 
+  // Retry payment state
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [isRazorpayVisible, setIsRazorpayVisible] = useState(false);
+  const [razorpayOptions, setRazorpayOptions] = useState<any>(null);
+  const [activeRetryBookingId, setActiveRetryBookingId] = useState<string | null>(null);
+
   const fetchSupabaseBookings = useCallback(async () => {
     if (!userId) {
-      setLoading(false);
       return;
     }
 
@@ -123,11 +125,22 @@ export default function BookingTabs() {
   }, [clerkSupabase, userId]);
 
   useEffect(() => {
-    if (userId) {
-      fetchSupabaseBookings();
-    } else {
-      setLoading(false);
-    }
+    let isMounted = true;
+
+    const loadInitialData = async () => {
+      if (!userId) {
+        if (isMounted) setLoading(false);
+        return;
+      }
+      await fetchSupabaseBookings();
+    };
+
+    void loadInitialData();
+
+    return () => {
+      isMounted = false;
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [userId, fetchSupabaseBookings]);
 
   const onRefresh = useCallback(async () => {
@@ -141,6 +154,87 @@ export default function BookingTabs() {
     if (timerRef.current) clearTimeout(timerRef.current);
     setRefreshing(false);
   }, [fetchSupabaseBookings]);
+
+  // Retry / Pay Now Logic
+  const handleRetryPayment = async (booking: BookingDisplayItem) => {
+    if (!userId) return;
+
+    try {
+      setRetryingId(booking.id);
+
+      const { data: orderResponse, error: orderError } = await clerkSupabase.functions.invoke(
+        "create-razorpay-order",
+        {
+          body: {
+            bookingIds: [booking.id],
+            amount: booking.numericAmount,
+            clerkUserId: userId,
+          },
+        },
+      );
+
+      if (orderError || !orderResponse?.order?.id) {
+        throw new Error(orderError?.message || "Could not initialize payment order.");
+      }
+
+      const razorpayOrder = orderResponse.order;
+
+      setRazorpayOptions({
+        key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TPXivOh8YV97Lz",
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency || "INR",
+        order_id: razorpayOrder.id,
+        name: "Speed Car Wash",
+        description: `Payment for ${booking.title}`,
+        prefill: {
+          name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "Customer",
+          email: user?.primaryEmailAddress?.emailAddress || "customer@example.com",
+          contact: booking.phone !== "N/A" ? booking.phone : "9999999999",
+        },
+        theme: {
+          color: Colors.primary || "#2563EB",
+        },
+      });
+
+      setActiveRetryBookingId(booking.id);
+      setIsRazorpayVisible(true);
+    } catch (err: any) {
+      Alert.alert("Payment Error", err?.message || "Something went wrong. Please try again.");
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  const handlePaymentSuccess = async (data: any) => {
+    setIsRazorpayVisible(false);
+
+    if (!activeRetryBookingId) return;
+
+    try {
+      setLoading(true);
+      await clerkSupabase
+        .from("bookings")
+        .update({
+          status: "Confirmed",
+          payment_id: data.razorpay_payment_id,
+        })
+        .eq("id", activeRetryBookingId);
+
+      Alert.alert("Payment Successful 🎉", "Your booking has been confirmed!");
+      await fetchSupabaseBookings();
+    } catch (err) {
+      console.error("Failed to update status after payment:", err);
+    } finally {
+      setLoading(false);
+      setActiveRetryBookingId(null);
+    }
+  };
+
+  const handlePaymentFailure = async (error: any) => {
+    setIsRazorpayVisible(false);
+    setActiveRetryBookingId(null);
+    Alert.alert("Payment Incomplete", error?.description || "Payment was not completed.");
+  };
 
   const handleCancel = async (id: string) => {
     Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
@@ -162,7 +256,7 @@ export default function BookingTabs() {
                 item.id === id ? { ...item, status: "Cancelled", type: "past" } : item,
               ),
             );
-          } catch (err: any) {
+          } catch {
             Alert.alert("Error", "Could not cancel booking");
           }
         },
@@ -190,7 +284,7 @@ export default function BookingTabs() {
         booking_id: ratingTarget.id,
         clerk_user_id: userId,
         user_name: authenticName,
-        rating: rating,
+        rating,
         comment: comment || null,
         service_name: ratingTarget.title,
         created_at: new Date().toISOString(),
@@ -202,7 +296,7 @@ export default function BookingTabs() {
         "Review Submitted! ⭐",
         "Thank you for your feedback! It helps us keep your ride looking its best.",
       );
-    } catch (err: any) {
+    } catch (err) {
       console.error("Review Submit Error:", err);
       Alert.alert("Submission Failed", "Could not save your review right now. Please try again.");
     }
@@ -217,87 +311,121 @@ export default function BookingTabs() {
     }
   });
 
-  const renderBookingCard = ({ item }: { item: BookingDisplayItem }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <Image
-          source={{
-            uri: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
-          }}
-          style={styles.cardImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerInfo}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.cardPrice}>{item.price}</Text>
-        </View>
-        <View
-          style={[
-            styles.badge,
-            item.status === "Confirmed" && styles.confirmedBadge,
-            item.status === "Pending" && styles.pendingBadge,
-            item.status === "Cancelled" && styles.cancelledBadge,
-            item.status === "Completed" && styles.completedBadge,
-          ]}
-        >
-          <Text style={styles.badgeText}>{item.status}</Text>
-        </View>
-      </View>
+  const renderBookingCard = ({ item }: { item: BookingDisplayItem }) => {
+    const statusLower = item.status.toLowerCase();
+    const isPendingOrFailed = statusLower === "pending" || statusLower === "failed";
+    const isCompleted = statusLower === "completed";
+    const isConfirmed = statusLower === "confirmed";
 
-      <View style={styles.divider} />
-
-      <View style={styles.cardDetails}>
-        <View style={styles.detailRow}>
-          <Ionicons name="calendar-outline" size={16} color="#64748B" />
-          <Text style={styles.detailText}>{item.date}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Ionicons name="location-outline" size={16} color="#64748B" />
-          <Text style={styles.detailText} numberOfLines={1}>
-            {item.address}
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Ionicons name="call-outline" size={16} color="#64748B" />
-          <Text style={styles.detailText}>{item.phone}</Text>
-        </View>
-      </View>
-
-      <View style={styles.cardActions}>
-        <TouchableOpacity
-          style={styles.invoiceBtn}
-          activeOpacity={0.8}
-          onPress={() => setSelectedInvoice(item)}
-        >
-          <Ionicons name="receipt-outline" size={15} color="#2563EB" />
-          <Text style={styles.invoiceBtnText}>View Receipt</Text>
-        </TouchableOpacity>
-
-        {item.type === "past" && item.status.toLowerCase() !== "cancelled" && (
-          <TouchableOpacity
-            style={[styles.invoiceBtn, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}
-            activeOpacity={0.8}
-            onPress={() => setRatingTarget(item)}
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Image
+            source={{
+              uri: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=300&auto=format&fit=crop&q=80",
+            }}
+            style={styles.cardImage}
+            resizeMode="cover"
+          />
+          <View style={styles.headerInfo}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.cardPrice}>{item.price}</Text>
+          </View>
+          <View
+            style={[
+              styles.badge,
+              item.status === "Confirmed" && styles.confirmedBadge,
+              item.status === "Pending" && styles.pendingBadge,
+              item.status === "Cancelled" && styles.cancelledBadge,
+              item.status === "Completed" && styles.completedBadge,
+              item.status === "Failed" && styles.cancelledBadge,
+            ]}
           >
-            <Ionicons name="star" size={15} color="#D97706" />
-            <Text style={[styles.invoiceBtnText, { color: "#D97706" }]}>Rate Service</Text>
-          </TouchableOpacity>
-        )}
+            <Text style={styles.badgeText}>{item.status}</Text>
+          </View>
+        </View>
 
-        {item.type === "upcoming" && item.status.toLowerCase() !== "cancelled" && (
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={() => handleCancel(item.id)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.cancelBtnText}>Cancel Booking</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.divider} />
+
+        <View style={styles.cardDetails}>
+          <View style={styles.detailRow}>
+            <Ionicons name="calendar-outline" size={16} color="#64748B" />
+            <Text style={styles.detailText}>{item.date}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Ionicons name="location-outline" size={16} color="#64748B" />
+            <Text style={styles.detailText} numberOfLines={1}>
+              {item.address}
+            </Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Ionicons name="call-outline" size={16} color="#64748B" />
+            <Text style={styles.detailText}>{item.phone}</Text>
+          </View>
+        </View>
+
+        {/* Card Actions */}
+        <View style={styles.cardActions}>
+          {isPendingOrFailed ? (
+            <TouchableOpacity
+              style={styles.retryPayBtn}
+              activeOpacity={0.8}
+              onPress={() => handleRetryPayment(item)}
+              disabled={retryingId === item.id}
+            >
+              {retryingId === item.id ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="card-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.retryPayBtnText}>Pay {item.price} & Confirm</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <>
+              {isCompleted && (
+                <TouchableOpacity
+                  style={styles.invoiceBtn}
+                  activeOpacity={0.8}
+                  onPress={() => setSelectedInvoice(item)}
+                >
+                  <Ionicons name="receipt-outline" size={15} color="#2563EB" />
+                  <Text style={styles.invoiceBtnText}>View Receipt</Text>
+                </TouchableOpacity>
+              )}
+
+              {isCompleted && (
+                <TouchableOpacity
+                  style={[
+                    styles.invoiceBtn,
+                    { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" },
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={() => setRatingTarget(item)}
+                >
+                  <Ionicons name="star" size={15} color="#D97706" />
+                  <Text style={[styles.invoiceBtnText, { color: "#D97706" }]}>Rate Service</Text>
+                </TouchableOpacity>
+              )}
+
+              {isConfirmed && item.type === "upcoming" && (
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => handleCancel(item.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -334,7 +462,6 @@ export default function BookingTabs() {
         </TouchableOpacity>
       )}
 
-      {/* FlatList handling both Loaded list, Empty state, and Initial Loading state */}
       <FlatList
         data={loading ? [] : filteredBookings}
         keyExtractor={(item) => item.id}
@@ -464,6 +591,18 @@ export default function BookingTabs() {
         onClose={() => setRatingTarget(null)}
         onSubmit={handleSubmitReview}
       />
+
+      {/* Retry Checkout Modal */}
+      <RazorpayModal
+        visible={isRazorpayVisible}
+        options={razorpayOptions}
+        onSuccess={handlePaymentSuccess}
+        onFailure={handlePaymentFailure}
+        onClose={() => {
+          setIsRazorpayVisible(false);
+          setActiveRetryBookingId(null);
+        }}
+      />
     </View>
   );
 }
@@ -528,6 +667,25 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   detailText: { fontSize: 13, color: "#64748B" },
   cardActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  retryPayBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#16A34A",
+    paddingVertical: 11,
+    borderRadius: 10,
+    elevation: 2,
+    shadowColor: "#16A34A",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  retryPayBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   invoiceBtn: {
     flex: 1,
     flexDirection: "row",
