@@ -1,7 +1,7 @@
 import Colors from "@/constants/colors";
 import Radius from "@/constants/radius";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,7 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import ReviewCard from "@/components/cards/ReviewCard";
 import ServiceCard from "@/components/cards/ServiceCard";
-import RefreshableScrollView from "@/components/common/RefreshableScrollView"; // <-- 1. Import Here
+import RefreshableScrollView from "@/components/common/RefreshableScrollView";
 import SectionTitle from "@/components/common/SectionTitle";
 import HeroBanner from "@/components/home/HeroBanner";
 import MembershipBanner from "@/components/home/MembershipBanner";
@@ -27,8 +27,7 @@ import NotificationBell from "@/components/home/notificationbell";
 import QuickActions from "@/components/home/QuickActions";
 import ServicesGrid from "@/components/home/ServicesGrid";
 import { useBookingStore } from "@/store/bookingStore";
-import { createClerkSupabaseClient } from "@/utils/supabase";
-import { supabase } from "@/utils/supabase";
+import { createClerkSupabaseClient, supabase } from "@/utils/supabase";
 import { useAuth, useUser } from "@clerk/expo";
 import * as Location from "expo-location";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -85,6 +84,28 @@ export interface DisplayReview {
   date?: string;
 }
 
+async function resolveCurrentAddress(): Promise<string> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      return "Delhi, India";
+    }
+    const location = await Location.getCurrentPositionAsync({});
+    const geoCode = await Location.reverseGeocodeAsync({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+    });
+    if (geoCode.length > 0) {
+      const currentPlace = geoCode[0];
+      return `${currentPlace.district || currentPlace.city}, ${currentPlace.region}`;
+    }
+    return "Delhi, India";
+  } catch (error) {
+    console.log("Location Error:", error);
+    return "Delhi, India";
+  }
+}
+
 export default function HomeScreen() {
   const [address, setAddress] = useState("Fetching location...");
   const [reviewsList, setReviewsList] = useState<DisplayReview[]>([]);
@@ -98,11 +119,13 @@ export default function HomeScreen() {
 
   const isFetchingRef = useRef(false);
 
-  // 🚀 STABLE TOKEN REF: Unstable function ref se re-render loop ko prevent karega
   const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const fetchLiveReviews = useCallback(async () => {
     if (isFetchingRef.current) return;
@@ -134,69 +157,60 @@ export default function HomeScreen() {
     }
   }, []);
 
-  const fetchUnreadCount = useCallback(async () => {
+  const fetchUnreadAndAdmin = useCallback(async () => {
     if (!userId) return;
     try {
       const db = createClerkSupabaseClient(() => getTokenRef.current());
-      const { count, error } = await db
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("clerk_user_id", userId)
-        .eq("read", false);
+      const [notifRes, profileRes] = await Promise.all([
+        db
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("clerk_user_id", userId)
+          .eq("read", false),
+        db.from("profiles").select("is_admin").eq("clerk_user_id", userId).maybeSingle(),
+      ]);
 
-      if (!error) setUnreadCount(count || 0);
+      if (!notifRes.error) setUnreadCount(notifRes.count || 0);
+      if (!profileRes.error && profileRes.data) {
+        setIsAdmin(Boolean(profileRes.data.is_admin));
+      }
     } catch (err) {
-      console.log("❌ [Notifications] Unread count fetch error:", err);
+      console.log("❌ [Home] Unread/Admin fetch error:", err);
     }
-  }, [userId]); // 🚀 getToken dependency mein nahi hai, ref se access ho raha hai
+  }, [userId]);
 
   const fetchLocation = useCallback(async () => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status !== "granted") {
-        setAddress("Delhi, India");
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      let geoCode = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-
-      if (geoCode.length > 0) {
-        const currentPlace = geoCode[0];
-        const formattedAddress = `${currentPlace.district || currentPlace.city}, ${currentPlace.region}`;
-        setAddress(formattedAddress);
-      }
-    } catch (error) {
-      console.log("Location Error:", error);
-      setAddress("Delhi, India");
-    }
+    const resolved = await resolveCurrentAddress();
+    setAddress(resolved);
   }, []);
 
-  // 2. Combined Refresh Function for Pull-to-Refresh
   const handleScreenRefresh = useCallback(async () => {
-    await Promise.all([fetchLiveReviews(), fetchLocation(), fetchUnreadCount()]);
-  }, [fetchLiveReviews, fetchLocation, fetchUnreadCount]);
+    await Promise.all([fetchLiveReviews(), fetchLocation(), fetchUnreadAndAdmin()]);
+  }, [fetchLiveReviews, fetchLocation, fetchUnreadAndAdmin]);
 
   useFocusEffect(
     useCallback(() => {
       fetchLiveReviews();
-      fetchUnreadCount();
-    }, [fetchLiveReviews, fetchUnreadCount]),
+      fetchUnreadAndAdmin();
+    }, [fetchLiveReviews, fetchUnreadAndAdmin]),
   );
 
   useEffect(() => {
-    fetchLocation();
-  }, [fetchLocation]);
+    let active = true;
+    resolveCurrentAddress().then((resolved) => {
+      if (active) {
+        setAddress(resolved);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-      {/* 3. Outer ScrollView replaced with RefreshableScrollView */}
       <RefreshableScrollView
         onRefresh={handleScreenRefresh}
         contentContainerStyle={styles.scrollContent}
@@ -238,6 +252,26 @@ export default function HomeScreen() {
           <Text style={styles.greetingTitle}>Hello, {user?.firstName || "Guest"} 👋</Text>
           <Text style={styles.greetingSub}>Keep your car clean, Keep your ride fresh</Text>
         </View>
+
+        {/* ADMIN QUICK-ACCESS BANNER (Visible only when is_admin === true) */}
+        {isAdmin && (
+          <TouchableOpacity
+            style={styles.adminQuickBanner}
+            activeOpacity={0.85}
+            onPress={() => router.push("/admin" as any)}
+          >
+            <View style={styles.adminIconCircle}>
+              <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.adminQuickTitle}>Admin Control Center</Text>
+              <Text style={styles.adminQuickSub}>
+                Tap to manage customer bookings, status & payments
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
 
         <HeroBanner />
         <ServicesGrid />
@@ -402,7 +436,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.background,
   },
-  greetingSection: { paddingHorizontal: 16, marginBottom: 24 },
+  greetingSection: { paddingHorizontal: 16, marginBottom: 16 },
   greetingTitle: {
     fontSize: 24,
     fontWeight: "800",
@@ -410,6 +444,35 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   greetingSub: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
+  adminQuickBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E293B",
+    marginHorizontal: 16,
+    marginBottom: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 14,
+    gap: 12,
+  },
+  adminIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  adminQuickTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  adminQuickSub: {
+    fontSize: 11.5,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
   horizontalScroll: { paddingLeft: 16, paddingRight: 8, paddingBottom: 16 },
   locationContainer: { flexDirection: "row", alignItems: "center", gap: 6 },
   locationLabel: {

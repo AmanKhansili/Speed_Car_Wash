@@ -3,7 +3,7 @@ import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,6 +14,9 @@ import {
 } from "react-native";
 
 type NotificationType =
+  | "booking_confirmed"
+  | "booking_cancelled"
+  | "admin_new_booking"
   | "booking_reminder_evening"
   | "booking_reminder_morning"
   | "status_check"
@@ -34,6 +37,21 @@ const TYPE_META: Record<
   string,
   { icon: keyof typeof Ionicons.glyphMap; bg: string; color: string }
 > = {
+  booking_confirmed: {
+    icon: "checkmark-circle-outline",
+    bg: "#DCFCE7",
+    color: "#16A34A",
+  },
+  booking_cancelled: {
+    icon: "close-circle-outline",
+    bg: "#FEE2E2",
+    color: "#DC2626",
+  },
+  admin_new_booking: {
+    icon: "shield-checkmark-outline",
+    bg: "#EFF6FF",
+    color: "#2563EB",
+  },
   booking_reminder_evening: {
     icon: "car-outline",
     bg: Colors.primaryLight,
@@ -72,7 +90,6 @@ function formatTimeAgo(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
-// Memoized Card Component with explicit displayName
 const NotificationCard = React.memo(function NotificationCard({
   item,
   onPress,
@@ -119,14 +136,14 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { userId, getToken } = useAuth();
 
-  // 🚀 STABLE TOKEN REF: Unstable function ref se re-render loop ko prevent karega
   const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 🚀 STABLE FETCH FUNCTION: Strictly locked to userId only
   const fetchNotifications = useCallback(async () => {
     if (!userId) {
       setLoading(false);
@@ -148,7 +165,7 @@ export default function NotificationsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [userId]); // 🚀 NO MORE `db` DEPENDENCY TO TRIGGER LOOPS!
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -185,6 +202,15 @@ export default function NotificationsScreen() {
           pathname: "/booking/service-check",
           params: { bookingId: item.booking_id, type: item.type },
         });
+      } else if (item.type === "admin_new_booking") {
+        router.push("/admin" as any);
+      } else if (
+        item.type === "booking_confirmed" ||
+        item.type === "booking_cancelled" ||
+        item.type === "booking_reminder_evening" ||
+        item.type === "booking_reminder_morning"
+      ) {
+        router.push("/(tabs)/bookings" as any);
       }
     },
     [router],

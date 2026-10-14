@@ -10,10 +10,10 @@ import "react-native-reanimated";
 import { UserProvider } from "@/context/userContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
-// Check if running inside Expo Go
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+  (Constants as any).appOwnership === "expo";
 
-// Setup notifications only outside Expo Go (Development / Production builds)
 if (!isExpoGo) {
   try {
     const Notifications = require("expo-notifications");
@@ -63,10 +63,9 @@ function RootLayoutNav() {
               pathname: "/booking/service-check",
               params: { bookingId: data.bookingId, type: data.type },
             });
-          } else if (
-            data.type === "booking_reminder_evening" ||
-            data.type === "booking_reminder_morning"
-          ) {
+          } else if (data.type === "admin_new_booking") {
+            router.push("/admin" as any);
+          } else {
             router.push("/(tabs)/bookings" as any);
           }
         },
@@ -90,6 +89,7 @@ function RootLayoutNav() {
       >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="booking" />
+        <Stack.Screen name="admin" />
         <Stack.Screen name="auth" />
       </Stack>
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />

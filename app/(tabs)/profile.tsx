@@ -19,7 +19,7 @@ import {
 import { useAuth, useClerk, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -47,6 +47,7 @@ interface SupabaseProfile {
   phone: string | null;
   created_at: string;
   membership_tier?: string | null;
+  is_admin?: boolean | null;
 }
 
 export default function ProfileScreen() {
@@ -57,7 +58,6 @@ export default function ProfileScreen() {
   const { userData, updatePhone } = useUserContext();
   const isLoaded = isUserLoaded && isAuthLoaded;
 
-  // Clean, Ref-Free client memoization
   const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
   const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
@@ -69,6 +69,9 @@ export default function ProfileScreen() {
     savedServices: 0,
   });
 
+  const hasProfileCacheHydratedRef = useRef(false);
+  const hasStatsCacheHydratedRef = useRef(false);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [firstNameInput, setFirstNameInput] = useState("");
@@ -78,20 +81,11 @@ export default function ProfileScreen() {
 
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
 
-  const activePhoneNumber = useMemo(() => {
-    return (
-      supabaseProfile?.phone ||
-      userData?.mobileNumber ||
-      user?.primaryPhoneNumber?.phoneNumber ||
-      user?.phoneNumbers?.[0]?.phoneNumber ||
-      ""
-    );
-  }, [
-    supabaseProfile?.phone,
-    userData?.mobileNumber,
-    user?.primaryPhoneNumber?.phoneNumber,
-    user?.phoneNumbers,
-  ]);
+  const localMobileNumber = userData?.mobileNumber || "";
+  const clerkPhoneFallback =
+    user?.primaryPhoneNumber?.phoneNumber || user?.phoneNumbers?.[0]?.phoneNumber || "";
+
+  const activePhoneNumber = supabaseProfile?.phone || localMobileNumber || clerkPhoneFallback;
 
   const fetchUserData = useCallback(
     async (forceRefresh = false) => {
@@ -104,8 +98,14 @@ export default function ProfileScreen() {
         const cachedProfile = await getCachedProfileData();
         const cachedStats = await getCachedStatsData();
 
-        if (cachedProfile && !supabaseProfile) setSupabaseProfile(cachedProfile);
-        if (cachedStats && !stats.totalBookings) setStats(cachedStats);
+        if (cachedProfile && !hasProfileCacheHydratedRef.current) {
+          hasProfileCacheHydratedRef.current = true;
+          setSupabaseProfile(cachedProfile);
+        }
+        if (cachedStats && !hasStatsCacheHydratedRef.current) {
+          hasStatsCacheHydratedRef.current = true;
+          setStats(cachedStats);
+        }
 
         if (!cachedProfile || !cachedStats) {
           setIsLoading(true);
@@ -120,7 +120,7 @@ export default function ProfileScreen() {
         const [profileRes, bookingsRes, subscriptionRes] = await Promise.all([
           db
             .from("profiles")
-            .select("name, phone, created_at, membership_tier")
+            .select("name, phone, created_at, membership_tier, is_admin")
             .eq("clerk_user_id", userId)
             .maybeSingle(),
           db
@@ -139,12 +139,7 @@ export default function ProfileScreen() {
 
         if (profileRes.data) {
           const profileData = profileRes.data;
-          const finalPhone =
-            profileData.phone ||
-            userData?.mobileNumber ||
-            user?.primaryPhoneNumber?.phoneNumber ||
-            user?.phoneNumbers?.[0]?.phoneNumber ||
-            null;
+          const finalPhone = profileData.phone || localMobileNumber || clerkPhoneFallback || null;
 
           const activeTier = subscriptionRes.data?.tier
             ? subscriptionRes.data.tier.toLowerCase().includes("gold")
@@ -152,13 +147,15 @@ export default function ProfileScreen() {
               : "premium"
             : "standard";
 
-          const formattedProfile = {
+          const formattedProfile: SupabaseProfile = {
             name: profileData.name,
             phone: finalPhone,
             created_at: profileData.created_at,
             membership_tier: activeTier,
+            is_admin: Boolean(profileData.is_admin),
           };
 
+          hasProfileCacheHydratedRef.current = true;
           setSupabaseProfile(formattedProfile);
           await saveProfileCache(formattedProfile);
           if (finalPhone) await savePhoneLocally(finalPhone);
@@ -194,6 +191,7 @@ export default function ProfileScreen() {
             savedServices: quickCards.length,
           };
 
+          hasStatsCacheHydratedRef.current = true;
           setStats(freshStats);
           await saveStatsCache(freshStats);
         }
@@ -203,10 +201,9 @@ export default function ProfileScreen() {
         setIsLoading(false);
       }
     },
-    [userId, db, userData?.mobileNumber],
+    [userId, db, localMobileNumber, clerkPhoneFallback],
   );
 
-  // Trigger only on tab switch / screen focus
   useFocusEffect(
     useCallback(() => {
       if (isLoaded && userId) {
@@ -261,6 +258,7 @@ export default function ProfileScreen() {
         created_at: supabaseProfile?.created_at || new Date().toISOString(),
         phone: formattedPhone,
         membership_tier: supabaseProfile?.membership_tier,
+        is_admin: supabaseProfile?.is_admin,
       };
 
       setSupabaseProfile(updatedProfile);
@@ -293,13 +291,13 @@ export default function ProfileScreen() {
     Alert.alert("Help & Support", "How would you like to get assistance?", [
       {
         text: "Call Support",
-        onPress: () => Linking.openURL("tel:+919876543210"),
+        onPress: () => Linking.openURL("tel:+917037489355"),
       },
       {
         text: "WhatsApp Us",
         onPress: () =>
           Linking.openURL(
-            "whatsapp://send?phone=+919876543210&text=Hi,%20I%20need%20assistance%20with%20my%20car%20wash%20booking.",
+            "whatsapp://send?phone=+917037489355&text=Hi,%20I%20need%20assistance%20with%20my%20car%20wash%20booking.",
           ).catch(() => Alert.alert("Error", "WhatsApp is not installed on your device.")),
       },
       {
@@ -377,7 +375,10 @@ export default function ProfileScreen() {
           upcoming={stats.upcoming}
         />
 
-        <ProfileMenuList onLogoutPress={handleLogout} />
+        <ProfileMenuList
+          isAdmin={Boolean(supabaseProfile?.is_admin)}
+          onLogoutPress={handleLogout}
+        />
       </RefreshableScrollView>
 
       <Modal
@@ -423,7 +424,7 @@ export default function ProfileScreen() {
                 <Text style={styles.inputLabel}>Mobile Number</Text>
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="+91 9876543210"
+                  placeholder="+91 7037489355"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
                   value={phoneInput}
@@ -475,6 +476,22 @@ export default function ProfileScreen() {
                 <Ionicons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
+
+            {supabaseProfile?.is_admin && (
+              <TouchableOpacity
+                style={styles.settingItem}
+                onPress={() => {
+                  setIsSettingsModalVisible(false);
+                  router.push("/admin" as any);
+                }}
+              >
+                <Ionicons name="shield-checkmark" size={20} color="#2563EB" />
+                <Text style={[styles.settingItemText, { color: "#2563EB", fontWeight: "700" }]}>
+                  Admin Control Center
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#2563EB" />
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.settingItem}

@@ -1,14 +1,19 @@
 import Colors from "@/constants/colors";
 import useUser from "@/context/userContext";
 import { createClerkSupabaseClient } from "@/utils/supabase";
-import { useAuth, useUser as useClerkUser } from "@clerk/expo";
-import { useRazorpay } from "@codearcade/expo-razorpay";
+import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Clipboard,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,16 +23,25 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const DEFAULT_UPI_ID = process.env.EXPO_PUBLIC_MERCHANT_UPI_ID || "amankhansilee@oksbi";
+const MERCHANT_NAME = process.env.EXPO_PUBLIC_MERCHANT_NAME || "Speed Car Wash";
+
+function isValidUtr(utr: string): boolean {
+  const cleaned = utr.trim();
+  if (!/^\d{12}$/.test(cleaned)) return false;
+  if (/^(\d)\1{11}$/.test(cleaned)) return false;
+  return true;
+}
+
 export default function MembershipCheckoutScreen() {
   const { userId, getToken } = useAuth();
-  const { user: clerkUser } = useClerkUser();
   const { userData } = useUser();
 
   const params = useLocalSearchParams<{
     planId?: string;
     planName?: string;
     billingCycle?: "monthly" | "quarterly";
-    amount?: string; // display-only estimate; server recalculates the real price
+    amount?: string;
   }>();
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>(
@@ -36,13 +50,17 @@ export default function MembershipCheckoutScreen() {
 
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState("");
+  const [discount, setDiscount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { openCheckout, RazorpayUI } = useRazorpay();
+  const [isQrModalVisible, setIsQrModalVisible] = useState(false);
+  const [utrInput, setUtrInput] = useState("");
 
   const clerkSupabase = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
 
-  // Display-only estimate — actual price/GST/discount is always recalculated server-side
   const estimatedBase = Number(params.amount) || 0;
+  const discountedBase = Math.max(0, estimatedBase - discount);
+  const gst = Math.round(discountedBase * 0.18);
+  const grandTotal = discountedBase > 0 ? discountedBase + gst : 0;
 
   const handleApplyCoupon = () => {
     if (!couponCode.trim()) {
@@ -53,14 +71,88 @@ export default function MembershipCheckoutScreen() {
       Alert.alert("Coupon Applied", "A coupon is already applied. Remove it first.");
       return;
     }
-    // Just a UI preview flag — server validates the real coupon against its own list
-    setAppliedCoupon(couponCode.trim().toUpperCase());
-    Alert.alert("Coupon Added", "We'll validate this coupon when you pay.");
+    const upper = couponCode.trim().toUpperCase();
+    if (upper === "FIRST50") {
+      setDiscount(50);
+      setAppliedCoupon(upper);
+      Alert.alert("Success", "Coupon FIRST50 applied! ₹50 off.");
+    } else if (upper === "CARWASH100") {
+      setDiscount(100);
+      setAppliedCoupon(upper);
+      Alert.alert("Success", "Coupon CARWASH100 applied! ₹100 off.");
+    } else {
+      Alert.alert("Invalid Coupon", "Use FIRST50 or CARWASH100.");
+    }
   };
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon("");
     setCouponCode("");
+    setDiscount(0);
+  };
+
+  const generateUpiUrl = () => {
+    const note = `Membership-${params.planName || "Plan"}`;
+    return `upi://pay?pa=${DEFAULT_UPI_ID}&pn=${encodeURIComponent(
+      MERCHANT_NAME,
+    )}&am=${grandTotal}&cu=INR&tn=${encodeURIComponent(note)}`;
+  };
+
+  const handleVerifyAndActivate = async () => {
+    if (!userId) return;
+    if (!isValidUtr(utrInput)) {
+      Alert.alert(
+        "Invalid UTR Number",
+        "Please enter the valid 12-digit UPI Ref / UTR number from your payment receipt.",
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const txnId = `UTR-${utrInput.trim()}`;
+      const daysToAdd = params.billingCycle === "quarterly" ? 90 : 30;
+      const periodEnd = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
+
+      await clerkSupabase.from("subscriptions").insert([
+        {
+          clerk_user_id: userId,
+          tier: params.planName || "Gold",
+          billing_cycle: params.billingCycle || "monthly",
+          amount: grandTotal,
+          status: "active",
+          payment_id: txnId,
+          current_period_end: periodEnd,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      await clerkSupabase
+        .from("profiles")
+        .update({
+          membership_tier: (params.planName || "gold").toLowerCase(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("clerk_user_id", userId);
+
+      setIsSubmitting(false);
+      setIsQrModalVisible(false);
+      setUtrInput("");
+
+      Alert.alert(
+        "Welcome to Premium! 🎉",
+        `Your ${params.planName} Membership is now ACTIVE.\nRef ID: ${txnId}`,
+        [
+          {
+            text: "Go to Profile",
+            onPress: () => router.replace("/(tabs)/profile" as any),
+          },
+        ],
+      );
+    } catch (err: any) {
+      setIsSubmitting(false);
+      Alert.alert("Error", err?.message || "Could not activate membership. Contact support.");
+    }
   };
 
   const handleMembershipPayment = async () => {
@@ -72,118 +164,20 @@ export default function MembershipCheckoutScreen() {
       Alert.alert("Error", "Please log in again to continue.");
       return;
     }
-    if (!params.planId) {
-      Alert.alert("Error", "Missing plan information.");
-      return;
-    }
 
-    setIsSubmitting(true);
+    const upiUrl = generateUpiUrl();
+    setUtrInput("");
+    setIsQrModalVisible(true);
 
-    try {
-      const { data, error } = await clerkSupabase.functions.invoke("create-membership-order", {
-        body: {
-          planId: params.planId,
-          billingCycle: params.billingCycle,
-          couponCode: appliedCoupon || undefined,
-          clerkUserId: userId,
-        },
-      });
-
-      if (error || !data?.order?.id || !data?.subscription?.id) {
-        throw new Error(error?.message || "Could not create membership order");
-      }
-
-      const { order, subscription, grandTotal } = data;
-
-      // 2. Customer prefill data
-      const customerName = clerkUser?.fullName || clerkUser?.firstName || "Valued Customer";
-      const customerEmail = clerkUser?.primaryEmailAddress?.emailAddress || "customer@example.com";
-      const customerPhone = clerkUser?.primaryPhoneNumber?.phoneNumber || "9999999999";
-
-      const razor = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
-
-      if (!razor) {
-        throw new Error("Key not configured in checkout ");
-      }
-
-      openCheckout(
-        {
-          key: razor,
-          amount: Math.round(grandTotal * 100),
-          currency: "INR",
-          order_id: order.id,
-          name: "Speed Car Wash",
-          description: `${params.planName} Membership (${params.billingCycle})`,
-          prefill: {
-            name: customerName,
-            email: customerEmail,
-            contact: customerPhone,
-          },
-          theme: { color: Colors.primary || "#2563EB" },
-        },
-        {
-          onSuccess: async (result: any) => {
-            try {
-              // 4. NEVER set status active from the client — verify server-side first
-              const { data: verifyData, error: verifyError } = await clerkSupabase.functions.invoke(
-                "verify-razorpay-payment",
-                {
-                  body: {
-                    razorpay_order_id: result.razorpay_order_id ?? order.id,
-                    razorpay_payment_id: result.razorpay_payment_id,
-                    razorpay_signature: result.razorpay_signature,
-                    subscriptionId: subscription.id,
-                    clerkUserId: userId,
-                  },
-                },
-              );
-
-              if (verifyError || !verifyData?.success) {
-                throw new Error(verifyError?.message || "Payment verification failed");
-              }
-
-              Alert.alert(
-                "Welcome to Premium! 🎉",
-                `Your ${params.planName} Membership is now ACTIVE. \nRef ID: ${result.razorpay_payment_id}`,
-                [
-                  {
-                    text: "Go to Profile",
-                    onPress: () => router.replace("/(tabs)/profile" as any),
-                  },
-                ],
-              );
-            } catch (verifyErr: any) {
-              Alert.alert(
-                "Payment received, activation pending",
-                "We couldn't confirm your payment automatically. Please contact support with your payment ID: " +
-                  result.razorpay_payment_id,
-              );
-              console.error(verifyErr);
-            } finally {
-              setIsSubmitting(false);
-            }
-          },
-          onFailure: async (error: any) => {
-            await clerkSupabase
-              .from("subscriptions")
-              .update({
-                status: "cancelled",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", subscription.id);
-
-            setIsSubmitting(false);
-            Alert.alert("Payment Failed", error?.description || "Payment could not be completed.");
-          },
-          onClose: () => setIsSubmitting(false),
-        },
-      );
-    } catch (err: any) {
-      setIsSubmitting(false);
-      Alert.alert("Error", err?.message || "Something went wrong.");
-      console.error(err);
+    const canOpen = await Linking.canOpenURL(upiUrl).catch(() => false);
+    if (canOpen) {
+      await Linking.openURL(upiUrl).catch(() => {});
     }
   };
+
+  const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(
+    generateUpiUrl(),
+  )}`;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -199,7 +193,7 @@ export default function MembershipCheckoutScreen() {
         <View style={styles.planCard}>
           <Text style={styles.planBadge}>{params.billingCycle?.toUpperCase()} PLAN</Text>
           <Text style={styles.planTitle}>{params.planName} Membership</Text>
-          <Text style={styles.planPrice}>₹{estimatedBase}</Text>
+          <Text style={styles.planPrice}>₹{grandTotal}</Text>
         </View>
 
         <Text style={styles.sectionTitle}>Select Vehicle for Membership</Text>
@@ -207,7 +201,9 @@ export default function MembershipCheckoutScreen() {
           {userData?.vehicles && userData.vehicles.length > 0 ? (
             userData.vehicles.map((v: any) => {
               const isSelected = selectedVehicleId === v.id;
-              const vehicleName = v.make ? `${v.make} ${v.model}` : v.model || "Vehicle";
+              const vehicleName = v.make
+                ? `${v.make} ${v.model}`
+                : `${v.brand || ""} ${v.model || ""}`.trim() || "Vehicle";
               return (
                 <TouchableOpacity
                   key={v.id}
@@ -253,7 +249,7 @@ export default function MembershipCheckoutScreen() {
                 styles.couponInput,
                 appliedCoupon ? { backgroundColor: "#F3F4F6", color: "#6B7280" } : null,
               ]}
-              placeholder="Enter Coupon"
+              placeholder="Enter Coupon (e.g. FIRST50)"
               placeholderTextColor="#9CA3AF"
               value={couponCode}
               onChangeText={setCouponCode}
@@ -272,7 +268,7 @@ export default function MembershipCheckoutScreen() {
           </View>
           {appliedCoupon ? (
             <Text style={styles.appliedText}>
-              Coupon {appliedCoupon} will be validated at payment time
+              ✅ Coupon {appliedCoupon} applied (₹{discount} off)
             </Text>
           ) : null}
         </View>
@@ -283,10 +279,36 @@ export default function MembershipCheckoutScreen() {
             <Text style={styles.infoLabel}>Base Price ({params.billingCycle})</Text>
             <Text style={styles.servicePrice}>₹{estimatedBase}</Text>
           </View>
-          <Text style={{ fontSize: 12, color: "#9CA3AF", marginTop: -4 }}>
-            Final amount (with GST & any discount) is confirmed at checkout
-          </Text>
+          {discount > 0 && (
+            <View style={styles.row}>
+              <Text style={[styles.infoLabel, { color: "#16A34A" }]}>
+                Discount ({appliedCoupon})
+              </Text>
+              <Text style={[styles.servicePrice, { color: "#16A34A" }]}>-₹{discount}</Text>
+            </View>
+          )}
+          <View style={styles.row}>
+            <Text style={styles.infoLabel}>GST (18%)</Text>
+            <Text style={styles.servicePrice}>₹{gst}</Text>
+          </View>
+          <View style={[styles.row, { marginTop: 6, marginBottom: 0 }]}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Total Payable</Text>
+            <Text style={{ fontSize: 18, fontWeight: "900", color: "#2563EB" }}>₹{grandTotal}</Text>
+          </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.qrPreviewBtn}
+          onPress={() => {
+            setUtrInput("");
+            setIsQrModalVisible(true);
+          }}
+        >
+          <Ionicons name="qr-code-outline" size={18} color="#2563EB" />
+          <Text style={styles.qrPreviewBtnText}>
+            Show Bank QR Scanner & Enter UTR (₹{grandTotal})
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -299,12 +321,92 @@ export default function MembershipCheckoutScreen() {
           {isSubmitting ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.confirmBtnText}>Continue to Pay</Text>
+            <Text style={styles.confirmBtnText}>Pay ₹{grandTotal} via Direct UPI</Text>
           )}
         </TouchableOpacity>
       </View>
 
-      {RazorpayUI}
+      {/* QR Code & 12-Digit UTR Modal */}
+      <Modal
+        visible={isQrModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsQrModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pay & Enter 12-Digit UTR</Text>
+              <TouchableOpacity onPress={() => setIsQrModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Image
+              source={{ uri: qrCodeImageUrl }}
+              style={{ width: 160, height: 160, marginVertical: 10 }}
+              resizeMode="contain"
+            />
+            <Text style={{ fontSize: 17, fontWeight: "800", color: "#2563EB" }}>₹{grandTotal}</Text>
+            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+              UPI ID: {DEFAULT_UPI_ID}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.copyUpiInlineBtn}
+              onPress={() => {
+                Clipboard.setString(DEFAULT_UPI_ID);
+                Alert.alert("Copied", DEFAULT_UPI_ID);
+              }}
+            >
+              <Ionicons name="copy-outline" size={14} color="#2563EB" />
+              <Text style={{ color: "#2563EB", fontWeight: "700", fontSize: 12 }}>Copy UPI ID</Text>
+            </TouchableOpacity>
+
+            <TextInput
+              style={styles.utrInput}
+              placeholder="Enter 12-digit UTR (e.g. 428719305821)"
+              placeholderTextColor="#94A3B8"
+              keyboardType="number-pad"
+              maxLength={12}
+              value={utrInput}
+              onChangeText={(txt) => setUtrInput(txt.replace(/\D/g, ""))}
+            />
+
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 10,
+                marginTop: 14,
+                width: "100%",
+              }}
+            >
+              <TouchableOpacity
+                style={styles.cancelUpiBtn}
+                onPress={() => {
+                  setIsQrModalVisible(false);
+                  setUtrInput("");
+                }}
+              >
+                <Text style={{ color: "#DC2626", fontWeight: "700", fontSize: 13 }}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.paidBtn, !isValidUtr(utrInput) && { backgroundColor: "#94A3B8" }]}
+                onPress={handleVerifyAndActivate}
+                disabled={isSubmitting}
+              >
+                <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 13 }}>
+                  Verify UTR & Activate
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -326,7 +428,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
-  content: { padding: 16, paddingBottom: 110 },
+  content: { padding: 16, paddingBottom: 120 },
   planCard: {
     backgroundColor: "#1E293B",
     padding: 20,
@@ -421,6 +523,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 8,
   },
+  qrPreviewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 13,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  qrPreviewBtnText: {
+    color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 14,
+  },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -438,4 +556,65 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   confirmBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 18,
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  modalTitle: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
+  copyUpiInlineBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+  },
+  utrInput: {
+    width: "100%",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    color: "#0F172A",
+    textAlign: "center",
+  },
+  cancelUpiBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+  },
+  paidBtn: {
+    flex: 1.3,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#16A34A",
+    alignItems: "center",
+  },
 });

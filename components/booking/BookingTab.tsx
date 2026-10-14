@@ -1,5 +1,4 @@
 import RatingModal from "@/components/booking/RatingModal";
-import RazorpayModal from "@/components/common/RazorpayModal";
 import Colors from "@/constants/colors";
 import { createClerkSupabaseClient } from "@/utils/supabase";
 import { useAuth, useUser } from "@clerk/expo";
@@ -11,15 +10,30 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
+  Linking,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+
+const DEFAULT_UPI_ID = process.env.EXPO_PUBLIC_MERCHANT_UPI_ID || "amankhansilee@oksbi";
+const MERCHANT_NAME = process.env.EXPO_PUBLIC_MERCHANT_NAME || "Speed Car Wash";
+const SUPPORT_WHATSAPP = process.env.EXPO_PUBLIC_SUPPORT_PHONE || "917037489355";
+
+function isValidUtr(utr: string): boolean {
+  const cleaned = utr.trim();
+  if (!/^\d{12}$/.test(cleaned)) return false;
+  if (/^(\d)\1{11}$/.test(cleaned)) return false;
+  return true;
+}
 
 export interface BookingDisplayItem {
   id: string;
@@ -31,13 +45,7 @@ export interface BookingDisplayItem {
   phone: string;
   paymentId?: string;
   vehicleName?: string;
-  status:
-    | "Confirmed"
-    | "Pending"
-    | "Cancelled"
-    | "Completed"
-    | "Failed"
-    | string;
+  status: "Confirmed" | "Pending" | "Cancelled" | "Completed" | "Failed" | string;
   type: "upcoming" | "past";
 }
 
@@ -46,8 +54,7 @@ export default function BookingTabs() {
   const { user } = useUser();
   const { userId, getToken } = useAuth();
 
-  // Stable token getter: isolates Clerk's dynamic token updates from re-render chains
-    const getTokenRef = useRef(getToken);
+  const getTokenRef = useRef(getToken);
   useEffect(() => {
     getTokenRef.current = getToken;
   }, [getToken]);
@@ -57,23 +64,16 @@ export default function BookingTabs() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [bookings, setBookings] = useState<BookingDisplayItem[]>([]);
-  const [selectedInvoice, setSelectedInvoice] =
-    useState<BookingDisplayItem | null>(null);
-  const [ratingTarget, setRatingTarget] = useState<BookingDisplayItem | null>(
-    null,
-  );
+  const [selectedInvoice, setSelectedInvoice] = useState<BookingDisplayItem | null>(null);
+  const [ratingTarget, setRatingTarget] = useState<BookingDisplayItem | null>(null);
 
   const isFetchingRef = useRef(false);
 
-  // Retry payment state
-  const [retryingId, setRetryingId] = useState<string | null>(null);
-  const [isRazorpayVisible, setIsRazorpayVisible] = useState(false);
-  const [razorpayOptions, setRazorpayOptions] = useState<any>(null);
-  const [activeRetryBookingId, setActiveRetryBookingId] = useState<
-    string | null
-  >(null);
+  // Retry UPI Modal State
+  const [retryBookingTarget, setRetryBookingTarget] = useState<BookingDisplayItem | null>(null);
+  const [utrInput, setUtrInput] = useState("");
+  const [submittingUtr, setSubmittingUtr] = useState(false);
 
-  // STABLE: Dependencies DO NOT include getToken or any dynamic callbacks
   const loadData = useCallback(async () => {
     if (!userId || isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -93,9 +93,7 @@ export default function BookingTabs() {
         const formattedBookings: BookingDisplayItem[] = data.map((item: any) => {
           const statusLower = item.status?.toLowerCase() || "";
           const isPast =
-            statusLower === "completed" ||
-            statusLower === "cancelled" ||
-            statusLower === "failed";
+            statusLower === "completed" || statusLower === "cancelled" || statusLower === "failed";
 
           const title =
             item.service_name ||
@@ -114,14 +112,9 @@ export default function BookingTabs() {
           const displayPhone = item.primary_phone || item.phone || "N/A";
           const displayAddress =
             item.address ||
-            (item.service_type === "pickup"
-              ? "Pickup Requested"
-              : "Workshop Center");
+            (item.service_type === "pickup" ? "Pickup Requested" : "Workshop Center");
 
-          const vehicleName =
-            item.services_booked?.vehicle?.name ||
-            item.vehicle_name ||
-            "Vehicle";
+          const vehicleName = item.services_booked?.vehicle?.name || item.vehicle_name || "Vehicle";
 
           return {
             id: item.id,
@@ -132,7 +125,7 @@ export default function BookingTabs() {
             address: displayAddress,
             status: item.status || "Pending",
             phone: displayPhone,
-            paymentId: item.payment_id || "Prepaid",
+            paymentId: item.payment_id || "Pending",
             vehicleName,
             type: isPast ? "past" : "upcoming",
           };
@@ -148,7 +141,6 @@ export default function BookingTabs() {
     }
   }, [userId]);
 
-  // STRICT MOUNT: Executes once when userId is present, breaks infinite loop completely
   useEffect(() => {
     let ignore = false;
 
@@ -176,127 +168,95 @@ export default function BookingTabs() {
   const handleRetryPayment = async (booking: BookingDisplayItem) => {
     if (!userId) return;
 
-    try {
-      setRetryingId(booking.id);
-      const client = createClerkSupabaseClient(() => getTokenRef.current());
+    const note = `Booking-${booking.id.slice(0, 8).toUpperCase()}`;
+    const upiUrl = `upi://pay?pa=${DEFAULT_UPI_ID}&pn=${encodeURIComponent(
+      MERCHANT_NAME,
+    )}&am=${booking.numericAmount}&cu=INR&tn=${encodeURIComponent(note)}&tr=${booking.id}`;
 
-      const { data: orderResponse, error: orderError } =
-        await client.functions.invoke("create-razorpay-order", {
-          body: {
-            bookingIds: [booking.id],
-            amount: booking.numericAmount,
-            clerkUserId: userId,
-          },
-        });
+    setUtrInput("");
+    setRetryBookingTarget(booking);
 
-      if (orderError || !orderResponse?.order?.id) {
-        throw new Error(
-          orderError?.message || "Could not initialize payment order.",
-        );
-      }
-
-      const razorpayOrder = orderResponse.order;
-
-      setRazorpayOptions({
-        key:
-          process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TPXivOh8YV97Lz",
-        amount: razorpayOrder.amount,
-        currency: razorpayOrder.currency || "INR",
-        order_id: razorpayOrder.id,
-        name: "Speed Car Wash",
-        description: `Payment for ${booking.title}`,
-        prefill: {
-          name:
-            `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-            "Customer",
-          email:
-            user?.primaryEmailAddress?.emailAddress || "customer@example.com",
-          contact: booking.phone !== "N/A" ? booking.phone : "9999999999",
-        },
-        theme: {
-          color: Colors.primary || "#2563EB",
-        },
-      });
-
-      setActiveRetryBookingId(booking.id);
-      setIsRazorpayVisible(true);
-    } catch (err: any) {
-      Alert.alert(
-        "Payment Error",
-        err?.message || "Something went wrong. Please try again.",
-      );
-    } finally {
-      setRetryingId(null);
+    const canOpen = await Linking.canOpenURL(upiUrl).catch(() => false);
+    if (canOpen) {
+      await Linking.openURL(upiUrl).catch(() => {});
     }
   };
 
-  const handlePaymentSuccess = async (data: any) => {
-    setIsRazorpayVisible(false);
+  const handleSubmitRetryUtr = async () => {
+    if (!retryBookingTarget || !userId) return;
 
-    if (!activeRetryBookingId) return;
+    if (!isValidUtr(utrInput)) {
+      Alert.alert(
+        "Invalid UTR Number",
+        "Please enter the valid 12-digit UPI Ref / UTR number from your payment receipt.",
+      );
+      return;
+    }
 
+    setSubmittingUtr(true);
     try {
-      setLoading(true);
       const client = createClerkSupabaseClient(() => getTokenRef.current());
-      await client
+      const paymentRef = `UTR-${utrInput.trim()}`;
+
+      const { error } = await client
         .from("bookings")
         .update({
-          status: "Confirmed",
-          payment_id: data.razorpay_payment_id,
+          payment_id: paymentRef,
+          status: "Pending",
         })
-        .eq("id", activeRetryBookingId);
+        .eq("id", retryBookingTarget.id);
 
-      Alert.alert("Payment Successful 🎉", "Your booking has been confirmed!");
-      await loadData();
-    } catch (err) {
-      console.error("Failed to update status after payment:", err);
+      if (error) throw error;
+
+      setRetryBookingTarget(null);
+      setUtrInput("");
+      Alert.alert(
+        "UTR Submitted ⏳",
+        `UTR ${paymentRef} recorded. Once Admin verifies your payment, status will update to Confirmed.`,
+      );
+      loadData();
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Could not submit UTR.");
     } finally {
-      setLoading(false);
-      setActiveRetryBookingId(null);
+      setSubmittingUtr(false);
     }
-  };
-
-  const handlePaymentFailure = async (error: any) => {
-    setIsRazorpayVisible(false);
-    setActiveRetryBookingId(null);
-    Alert.alert(
-      "Payment Incomplete",
-      error?.description || "Payment was not completed.",
-    );
   };
 
   const handleCancel = async (id: string) => {
-    Alert.alert(
-      "Cancel Booking",
-      "Are you sure you want to cancel this booking?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, Cancel",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const client = createClerkSupabaseClient(() => getTokenRef.current());
-              const { error } = await client
-                .from("bookings")
-                .update({ status: "Cancelled" })
-                .eq("id", id);
+    Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes, Cancel",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const client = createClerkSupabaseClient(() => getTokenRef.current());
+            const { error } = await client
+              .from("bookings")
+              .update({ status: "Cancelled" })
+              .eq("id", id);
 
-              if (error) throw error;
+            if (error) throw error;
 
-              setBookings((prev) =>
-                prev.map((item) =>
-                  item.id === id
-                    ? { ...item, status: "Cancelled", type: "past" }
-                    : item,
-                ),
-              );
-            } catch {
-              Alert.alert("Error", "Could not cancel booking");
-            }
-          },
+            setBookings((prev) =>
+              prev.map((item) =>
+                item.id === id ? { ...item, status: "Cancelled", type: "past" } : item,
+              ),
+            );
+          } catch {
+            Alert.alert("Error", "Could not cancel booking");
+          }
         },
-      ],
+      },
+    ]);
+  };
+
+  const handleWhatsAppSupport = (item: BookingDisplayItem) => {
+    const msg = `Hi Speed Car Wash! I have a question regarding my booking #${item.id
+      .slice(0, 6)
+      .toUpperCase()} (${item.title} on ${item.date}).`;
+    Linking.openURL(`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(msg)}`).catch(() =>
+      Alert.alert("Error", "Could not open WhatsApp."),
     );
   };
 
@@ -335,10 +295,7 @@ export default function BookingTabs() {
       );
     } catch (err) {
       console.error("Review Submit Error:", err);
-      Alert.alert(
-        "Submission Failed",
-        "Could not save your review right now. Please try again.",
-      );
+      Alert.alert("Submission Failed", "Could not save your review right now. Please try again.");
     }
   };
 
@@ -353,10 +310,12 @@ export default function BookingTabs() {
 
   const renderBookingCard = ({ item }: { item: BookingDisplayItem }) => {
     const statusLower = item.status.toLowerCase();
-    const isPendingOrFailed =
-      statusLower === "pending" || statusLower === "failed";
+    const isPendingOrFailed = statusLower === "pending" || statusLower === "failed";
     const isCompleted = statusLower === "completed";
     const isConfirmed = statusLower === "confirmed";
+    const isCashOnSpot = item.paymentId === "CASH_OR_SPOT_QR";
+    const isUtrSubmitted = item.paymentId?.startsWith("UTR-");
+    const isUpiPaid = item.paymentId?.startsWith("UPI-") || isUtrSubmitted;
 
     return (
       <View style={styles.card}>
@@ -372,7 +331,27 @@ export default function BookingTabs() {
             <Text style={styles.cardTitle} numberOfLines={1}>
               {item.title}
             </Text>
-            <Text style={styles.cardPrice}>{item.price}</Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 2,
+              }}
+            >
+              <Text style={styles.cardPrice}>{item.price}</Text>
+              <Text style={styles.paymentModeText}>
+                {isUtrSubmitted && statusLower === "pending"
+                  ? `• UTR Sent (${item.paymentId})`
+                  : isUpiPaid
+                    ? "Paid via UPI"
+                    : isCashOnSpot
+                      ? "• Pay After Wash"
+                      : item.paymentId === "PAID_CASH_OR_QR"
+                        ? "Paid on Spot"
+                        : "Payment Pending"}
+              </Text>
+            </View>
           </View>
           <View
             style={[
@@ -387,6 +366,40 @@ export default function BookingTabs() {
             <Text style={styles.badgeText}>{item.status}</Text>
           </View>
         </View>
+
+        {/* Live Status Stepper for Active Bookings */}
+        {statusLower !== "cancelled" && statusLower !== "failed" && (
+          <View style={styles.stepperWrap}>
+            <View style={styles.stepItem}>
+              <View style={[styles.stepDot, styles.stepDotDone]}>
+                <Ionicons name="checkmark" size={10} color="#FFF" />
+              </View>
+              <Text style={styles.stepLabelActive}>Booked</Text>
+            </View>
+
+            <View style={[styles.stepLine, (isConfirmed || isCompleted) && styles.stepLineDone]} />
+
+            <View style={styles.stepItem}>
+              <View style={[styles.stepDot, (isConfirmed || isCompleted) && styles.stepDotDone]}>
+                {isConfirmed || isCompleted ? (
+                  <Ionicons name="checkmark" size={10} color="#FFF" />
+                ) : null}
+              </View>
+              <Text style={isConfirmed || isCompleted ? styles.stepLabelActive : styles.stepLabel}>
+                Confirmed
+              </Text>
+            </View>
+
+            <View style={[styles.stepLine, isCompleted && styles.stepLineDone]} />
+
+            <View style={styles.stepItem}>
+              <View style={[styles.stepDot, isCompleted && styles.stepDotDone]}>
+                {isCompleted ? <Ionicons name="checkmark" size={10} color="#FFF" /> : null}
+              </View>
+              <Text style={isCompleted ? styles.stepLabelActive : styles.stepLabel}>Completed</Text>
+            </View>
+          </View>
+        )}
 
         <View style={styles.divider} />
 
@@ -409,23 +422,35 @@ export default function BookingTabs() {
 
         <View style={styles.cardActions}>
           {isPendingOrFailed ? (
-            <TouchableOpacity
-              style={styles.retryPayBtn}
-              activeOpacity={0.8}
-              onPress={() => handleRetryPayment(item)}
-              disabled={retryingId === item.id}
-            >
-              {retryingId === item.id ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons name="card-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.retryPayBtnText}>
-                    Pay {item.price} & Confirm
-                  </Text>
-                </>
+            <>
+              {!isUtrSubmitted && (
+                <TouchableOpacity
+                  style={styles.retryPayBtn}
+                  activeOpacity={0.8}
+                  onPress={() => handleRetryPayment(item)}
+                >
+                  <Ionicons name="flash-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.retryPayBtnText}>Pay {item.price} via UPI</Text>
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.whatsappBtn}
+                onPress={() => handleWhatsAppSupport(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="logo-whatsapp" size={15} color="#16A34A" />
+                <Text style={styles.whatsappBtnText}>Support</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => handleCancel(item.id)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </>
           ) : (
             <>
               {isCompleted && (
@@ -449,20 +474,29 @@ export default function BookingTabs() {
                   onPress={() => setRatingTarget(item)}
                 >
                   <Ionicons name="star" size={15} color="#D97706" />
-                  <Text style={[styles.invoiceBtnText, { color: "#D97706" }]}>
-                    Rate Service
-                  </Text>
+                  <Text style={[styles.invoiceBtnText, { color: "#D97706" }]}>Rate Service</Text>
                 </TouchableOpacity>
               )}
 
               {isConfirmed && item.type === "upcoming" && (
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => handleCancel(item.id)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.cancelBtnText}>Cancel Booking</Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity
+                    style={styles.whatsappBtn}
+                    onPress={() => handleWhatsAppSupport(item)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="logo-whatsapp" size={15} color="#16A34A" />
+                    <Text style={styles.whatsappBtnText}>Support</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={() => handleCancel(item.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </>
               )}
             </>
           )}
@@ -475,37 +509,21 @@ export default function BookingTabs() {
     <View style={styles.container}>
       <View style={styles.tabHeader}>
         <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "upcoming" && styles.activeTabButton,
-          ]}
+          style={[styles.tabButton, activeTab === "upcoming" && styles.activeTabButton]}
           onPress={() => setActiveTab("upcoming")}
           activeOpacity={0.8}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "upcoming" && styles.activeTabText,
-            ]}
-          >
+          <Text style={[styles.tabText, activeTab === "upcoming" && styles.activeTabText]}>
             Upcoming
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "past" && styles.activeTabButton,
-          ]}
+          style={[styles.tabButton, activeTab === "past" && styles.activeTabButton]}
           onPress={() => setActiveTab("past")}
           activeOpacity={0.8}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "past" && styles.activeTabText,
-            ]}
-          >
+          <Text style={[styles.tabText, activeTab === "past" && styles.activeTabText]}>
             Past & Cancelled
           </Text>
         </TouchableOpacity>
@@ -542,22 +560,75 @@ export default function BookingTabs() {
         ListEmptyComponent={() => (
           <View style={styles.emptyBox}>
             {loading && !refreshing ? (
-              <ActivityIndicator
-                size="large"
-                color={Colors.primary || "#2563EB"}
-              />
+              <ActivityIndicator size="large" color={Colors.primary || "#2563EB"} />
             ) : (
               <>
                 <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
-                <Text style={styles.emptyText}>
-                  No {activeTab} bookings found.
-                </Text>
+                <Text style={styles.emptyText}>No {activeTab} bookings found.</Text>
               </>
             )}
           </View>
         )}
       />
 
+      {/* Retry 12-Digit UTR Verification Modal */}
+      <Modal
+        visible={!!retryBookingTarget}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRetryBookingTarget(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlayCenter}
+        >
+          <View style={styles.utrModalCard}>
+            <Text style={styles.utrModalTitle}>Verify UPI Payment</Text>
+            <Text style={styles.utrModalSub}>
+              Enter the 12-digit UTR / UPI Reference Number for {retryBookingTarget?.price}
+            </Text>
+
+            <TextInput
+              style={styles.utrInput}
+              placeholder="12-digit UTR (e.g. 428719305821)"
+              placeholderTextColor="#94A3B8"
+              keyboardType="number-pad"
+              maxLength={12}
+              value={utrInput}
+              onChangeText={(txt) => setUtrInput(txt.replace(/\D/g, ""))}
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 14 }}>
+              <TouchableOpacity
+                style={styles.utrCancelBtn}
+                onPress={() => {
+                  setRetryBookingTarget(null);
+                  setUtrInput("");
+                }}
+              >
+                <Text style={styles.utrCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.utrSubmitBtn,
+                  !isValidUtr(utrInput) && { backgroundColor: "#94A3B8" },
+                ]}
+                onPress={handleSubmitRetryUtr}
+                disabled={submittingUtr}
+              >
+                {submittingUtr ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={styles.utrSubmitText}>Submit UTR</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Official Receipt Modal */}
       <Modal
         visible={!!selectedInvoice}
         animationType="slide"
@@ -593,30 +664,19 @@ export default function BookingTabs() {
                   <View style={styles.invoiceMeta}>
                     <View style={styles.metaRow}>
                       <Text style={styles.metaLabel}>Date:</Text>
-                      <Text style={styles.metaValue}>
-                        {selectedInvoice.date}
-                      </Text>
+                      <Text style={styles.metaValue}>{selectedInvoice.date}</Text>
                     </View>
                     <View style={styles.metaRow}>
                       <Text style={styles.metaLabel}>Vehicle:</Text>
-                      <Text style={styles.metaValue}>
-                        {selectedInvoice.vehicleName}
-                      </Text>
+                      <Text style={styles.metaValue}>{selectedInvoice.vehicleName}</Text>
                     </View>
                     <View style={styles.metaRow}>
                       <Text style={styles.metaLabel}>Payment Ref:</Text>
-                      <Text style={styles.metaValue}>
-                        {selectedInvoice.paymentId}
-                      </Text>
+                      <Text style={styles.metaValue}>{selectedInvoice.paymentId}</Text>
                     </View>
                     <View style={styles.metaRow}>
                       <Text style={styles.metaLabel}>Status:</Text>
-                      <Text
-                        style={[
-                          styles.metaValue,
-                          { color: "#16A34A", fontWeight: "700" },
-                        ]}
-                      >
+                      <Text style={[styles.metaValue, { color: "#16A34A", fontWeight: "700" }]}>
                         {selectedInvoice.status}
                       </Text>
                     </View>
@@ -626,14 +686,9 @@ export default function BookingTabs() {
                     <Text style={styles.tableHead}>ITEM BREAKDOWN</Text>
 
                     <View style={styles.tableRow}>
-                      <Text style={styles.tableName}>
-                        {selectedInvoice.title}
-                      </Text>
+                      <Text style={styles.tableName}>{selectedInvoice.title}</Text>
                       <Text style={styles.tablePrice}>
-                        ₹
-                        {Math.round(
-                          (selectedInvoice.numericAmount || 499) / 1.18,
-                        )}
+                        ₹{Math.round((selectedInvoice.numericAmount || 499) / 1.18)}
                       </Text>
                     </View>
 
@@ -642,9 +697,7 @@ export default function BookingTabs() {
                       <Text style={styles.tablePrice}>
                         ₹
                         {(selectedInvoice.numericAmount || 499) -
-                          Math.round(
-                            (selectedInvoice.numericAmount || 499) / 1.18,
-                          )}
+                          Math.round((selectedInvoice.numericAmount || 499) / 1.18)}
                       </Text>
                     </View>
 
@@ -656,10 +709,7 @@ export default function BookingTabs() {
                     </View>
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.doneBtn}
-                    onPress={() => setSelectedInvoice(null)}
-                  >
+                  <TouchableOpacity style={styles.doneBtn} onPress={() => setSelectedInvoice(null)}>
                     <Text style={styles.doneBtnText}>Close Receipt</Text>
                   </TouchableOpacity>
                 </ScrollView>
@@ -674,17 +724,6 @@ export default function BookingTabs() {
         serviceTitle={ratingTarget?.title || "Car Wash Service"}
         onClose={() => setRatingTarget(null)}
         onSubmit={handleSubmitReview}
-      />
-
-      <RazorpayModal
-        visible={isRazorpayVisible}
-        options={razorpayOptions}
-        onSuccess={handlePaymentSuccess}
-        onFailure={handlePaymentFailure}
-        onClose={() => {
-          setIsRazorpayVisible(false);
-          setActiveRetryBookingId(null);
-        }}
       />
     </View>
   );
@@ -750,9 +789,13 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
   cardPrice: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     color: Colors.primary || "#2563EB",
-    marginTop: 2,
+  },
+  paymentModeText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#64748B",
   },
   badge: {
     paddingHorizontal: 8,
@@ -765,28 +808,71 @@ const styles = StyleSheet.create({
   pendingBadge: { backgroundColor: "#FEF3C7" },
   cancelledBadge: { backgroundColor: "#FEE2E2" },
   completedBadge: { backgroundColor: "#F1F5F9" },
+
+  stepperWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  stepItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  stepDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepDotDone: {
+    backgroundColor: "#16A34A",
+  },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: "#E2E8F0",
+    marginHorizontal: 6,
+  },
+  stepLineDone: {
+    backgroundColor: "#16A34A",
+  },
+  stepLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+  stepLabelActive: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+
   divider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 10 },
   cardDetails: { gap: 6 },
   detailRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   detailText: { fontSize: 13, color: "#64748B" },
-  cardActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  cardActions: { flexDirection: "row", gap: 8, marginTop: 12 },
   retryPayBtn: {
-    flex: 1,
+    flex: 1.4,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#16A34A",
-    paddingVertical: 11,
+    gap: 6,
+    backgroundColor: "#2563EB",
+    paddingVertical: 10,
     borderRadius: 10,
-    elevation: 2,
-    shadowColor: "#16A34A",
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
   },
   retryPayBtnText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
   invoiceBtn: {
@@ -806,8 +892,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-  cancelBtn: {
+  whatsappBtn: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  whatsappBtnText: {
+    color: "#16A34A",
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+  cancelBtn: {
+    flex: 0.8,
     paddingVertical: 9,
     alignItems: "center",
     justifyContent: "center",
@@ -815,13 +918,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#EF4444",
   },
-  cancelBtnText: { color: "#EF4444", fontSize: 13, fontWeight: "600" },
+  cancelBtnText: { color: "#EF4444", fontSize: 12.5, fontWeight: "600" },
   emptyBox: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 40,
   },
   emptyText: { marginTop: 8, color: "#94A3B8", fontSize: 14 },
+
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  utrModalCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 20,
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+  },
+  utrModalTitle: { fontSize: 17, fontWeight: "800", color: "#0F172A" },
+  utrModalSub: {
+    fontSize: 12.5,
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  utrInput: {
+    width: "100%",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    color: "#0F172A",
+    textAlign: "center",
+  },
+  utrCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+  },
+  utrCancelText: { color: "#DC2626", fontWeight: "700", fontSize: 13 },
+  utrSubmitBtn: {
+    flex: 1.3,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#16A34A",
+    alignItems: "center",
+  },
+  utrSubmitText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.6)",

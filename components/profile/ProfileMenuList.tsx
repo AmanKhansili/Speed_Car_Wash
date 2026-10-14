@@ -1,7 +1,6 @@
 import Colors from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export interface MenuItem {
@@ -32,30 +31,6 @@ const PRIMARY_ITEMS: MenuItem[] = [
     route: "/membership",
     bgColor: "#EEF2FF",
   },
-  // {
-  //   id: "payments",
-  //   title: "Payment Methods",
-  //   subtitle: "Cards, UPI & Wallets",
-  //   icon: "card-outline",
-  //   route: "/payments",
-  //   bgColor: "#EEF2FF",
-  // },
-  // {
-  //   id: "vehicles",
-  //   title: "My Vehicles",
-  //   subtitle: "Manage your cars",
-  //   icon: "car-outline",
-  //   route: "/vehicles",
-  //   bgColor: "#EEF2FF",
-  // },
-  // {
-  //   id: "saved_services",
-  //   title: "Saved Services",
-  //   subtitle: "Your favorite services",
-  //   icon: "heart-outline",
-  //   route: "/saved-services",
-  //   bgColor: "#EEF2FF",
-  // },
   {
     id: "referral",
     title: "Refer & Earn",
@@ -88,11 +63,16 @@ const SECONDARY_ITEMS: MenuItem[] = [
 ];
 
 interface ProfileMenuListProps {
+  isAdmin?: boolean;
   onItemPress?: (id: string) => void;
   onLogoutPress?: () => void;
 }
 
-export default function ProfileMenuList({ onItemPress, onLogoutPress }: ProfileMenuListProps) {
+export default function ProfileMenuList({
+  isAdmin = false,
+  onItemPress,
+  onLogoutPress,
+}: ProfileMenuListProps) {
   const router = useRouter();
 
   const handlePress = (item: MenuItem) => {
@@ -112,6 +92,26 @@ export default function ProfileMenuList({ onItemPress, onLogoutPress }: ProfileM
 
   return (
     <View style={styles.container}>
+      {/* Admin Control Center Card (Visible only when is_admin === true) */}
+      {isAdmin && (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.adminBanner}
+          onPress={() => router.push("/admin" as any)}
+        >
+          <View style={styles.adminIconBadge}>
+            <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
+          </View>
+          <View style={styles.textWrapper}>
+            <Text style={styles.adminTitle}>Admin Control Center</Text>
+            <Text style={styles.adminSubtitle}>
+              Manage all customer bookings, payments & status
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+
       {/* Primary Menu Group */}
       <View style={styles.menuGroup}>
         {PRIMARY_ITEMS.map((item, index) => (
@@ -175,6 +175,35 @@ const styles = StyleSheet.create({
   container: {
     gap: 16,
     marginBottom: 40,
+  },
+  adminBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E293B",
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  adminIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+  adminTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  adminSubtitle: {
+    fontSize: 11.5,
+    color: "#94A3B8",
+    marginTop: 2,
   },
   menuGroup: {
     backgroundColor: Colors.surface || "#FFFFFF",
