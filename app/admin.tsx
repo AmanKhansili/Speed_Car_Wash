@@ -41,6 +41,7 @@ export default function AdminDashboardScreen() {
 
   const loadAdminData = useCallback(async () => {
     if (!userId) {
+      await Promise.resolve();
       setLoading(false);
       return;
     }
@@ -84,7 +85,16 @@ export default function AdminDashboardScreen() {
   }, [userId]);
 
   useEffect(() => {
-    loadAdminData();
+    let active = true;
+    const init = async () => {
+      if (active) {
+        await loadAdminData();
+      }
+    };
+    init();
+    return () => {
+      active = false;
+    };
   }, [loadAdminData]);
 
   const onRefresh = useCallback(async () => {

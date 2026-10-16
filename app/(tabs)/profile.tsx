@@ -291,13 +291,13 @@ export default function ProfileScreen() {
     Alert.alert("Help & Support", "How would you like to get assistance?", [
       {
         text: "Call Support",
-        onPress: () => Linking.openURL("tel:+917037489355"),
+        onPress: () => Linking.openURL("tel:+918938936776"),
       },
       {
         text: "WhatsApp Us",
         onPress: () =>
           Linking.openURL(
-            "whatsapp://send?phone=+917037489355&text=Hi,%20I%20need%20assistance%20with%20my%20car%20wash%20booking.",
+            "whatsapp://send?phone=+918938936776&text=Hi,%20I%20need%20assistance%20with%20my%20car%20wash%20booking.",
           ).catch(() => Alert.alert("Error", "WhatsApp is not installed on your device.")),
       },
       {
@@ -424,7 +424,7 @@ export default function ProfileScreen() {
                 <Text style={styles.inputLabel}>Mobile Number</Text>
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="+91 7037489355"
+                  placeholder="+91 8938936776"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
                   value={phoneInput}

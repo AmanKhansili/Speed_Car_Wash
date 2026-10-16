@@ -24,9 +24,9 @@ import {
   View,
 } from "react-native";
 
-const DEFAULT_UPI_ID = process.env.EXPO_PUBLIC_MERCHANT_UPI_ID || "amankhansilee@oksbi";
+const DEFAULT_UPI_ID = process.env.EXPO_PUBLIC_MERCHANT_UPI_ID || "paytmqr5hk7au@ptys";
 const MERCHANT_NAME = process.env.EXPO_PUBLIC_MERCHANT_NAME || "Speed Car Wash";
-const SUPPORT_WHATSAPP = process.env.EXPO_PUBLIC_SUPPORT_PHONE || "917037489355";
+const SUPPORT_WHATSAPP = process.env.EXPO_PUBLIC_SUPPORT_PHONE || "918938936776";
 
 function isValidUtr(utr: string): boolean {
   const cleaned = utr.trim();
