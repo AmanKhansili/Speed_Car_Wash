@@ -19,7 +19,7 @@ import {
 import { useAuth, useClerk, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -58,9 +58,24 @@ export default function ProfileScreen() {
   const { userData, updatePhone } = useUserContext();
   const isLoaded = isUserLoaded && isAuthLoaded;
 
-  const db = useMemo(() => createClerkSupabaseClient(getToken), [getToken]);
+  // FIX 1: getToken ko ref mein rakha taaki `db` har render pe naya na bane
+  const getTokenRef = useRef(getToken);
 
-  const [supabaseProfile, setSupabaseProfile] = useState<SupabaseProfile | null>(null);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  const db = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs
+      createClerkSupabaseClient((...args: any[]) =>
+        (getTokenRef.current as any)(...args),
+      ),
+    [],
+  );
+
+  const [supabaseProfile, setSupabaseProfile] =
+    useState<SupabaseProfile | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalBookings: 0,
@@ -83,9 +98,21 @@ export default function ProfileScreen() {
 
   const localMobileNumber = userData?.mobileNumber || "";
   const clerkPhoneFallback =
-    user?.primaryPhoneNumber?.phoneNumber || user?.phoneNumbers?.[0]?.phoneNumber || "";
+    user?.primaryPhoneNumber?.phoneNumber ||
+    user?.phoneNumbers?.[0]?.phoneNumber ||
+    "";
 
-  const activePhoneNumber = supabaseProfile?.phone || localMobileNumber || clerkPhoneFallback;
+  const activePhoneNumber =
+    supabaseProfile?.phone || localMobileNumber || clerkPhoneFallback;
+
+  // FIX 2: phone fallback ref mein, fetchUserData ki dependency se bahar
+  const phoneFallbackRef = useRef(localMobileNumber || clerkPhoneFallback);
+
+  useEffect(() => {
+    phoneFallbackRef.current = localMobileNumber || clerkPhoneFallback;
+  }, [localMobileNumber, clerkPhoneFallback]);
+
+  const isFetchingRef = useRef(false);
 
   const fetchUserData = useCallback(
     async (forceRefresh = false) => {
@@ -93,6 +120,10 @@ export default function ProfileScreen() {
         setIsLoading(false);
         return;
       }
+
+      // FIX 3: overlapping fetch rok do
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
 
       try {
         const cachedProfile = await getCachedProfileData();
@@ -139,7 +170,8 @@ export default function ProfileScreen() {
 
         if (profileRes.data) {
           const profileData = profileRes.data;
-          const finalPhone = profileData.phone || localMobileNumber || clerkPhoneFallback || null;
+          const finalPhone =
+            profileData.phone || phoneFallbackRef.current || null;
 
           const activeTier = subscriptionRes.data?.tier
             ? subscriptionRes.data.tier.toLowerCase().includes("gold")
@@ -173,7 +205,8 @@ export default function ProfileScreen() {
 
           const actualBookings = bookingsData.filter(
             (b: any) =>
-              b.status?.toLowerCase() !== "saved" && b.status?.toLowerCase() !== "saved_template",
+              b.status?.toLowerCase() !== "saved" &&
+              b.status?.toLowerCase() !== "saved_template",
           );
 
           const completed = actualBookings.filter(
@@ -181,7 +214,9 @@ export default function ProfileScreen() {
           ).length;
 
           const upcoming = actualBookings.filter((b: any) =>
-            ["confirmed", "pending", "upcoming"].includes(b.status?.toLowerCase()),
+            ["confirmed", "pending", "upcoming"].includes(
+              b.status?.toLowerCase(),
+            ),
           ).length;
 
           const freshStats = {
@@ -198,10 +233,11 @@ export default function ProfileScreen() {
       } catch (error) {
         console.error("Error fetching profile details:", error);
       } finally {
+        isFetchingRef.current = false;
         setIsLoading(false);
       }
     },
-    [userId, db, localMobileNumber, clerkPhoneFallback],
+    [userId, db],
   );
 
   useFocusEffect(
@@ -235,7 +271,8 @@ export default function ProfileScreen() {
       });
 
       const formattedPhone = phoneInput.trim();
-      const fullName = `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
+      const fullName =
+        `${firstNameInput.trim()} ${lastNameInput.trim()}`.trim();
 
       const { error } = await db.from("profiles").upsert(
         {
@@ -298,7 +335,9 @@ export default function ProfileScreen() {
         onPress: () =>
           Linking.openURL(
             "whatsapp://send?phone=+918938936776&text=Hi,%20I%20need%20assistance%20with%20my%20car%20wash%20booking.",
-          ).catch(() => Alert.alert("Error", "WhatsApp is not installed on your device.")),
+          ).catch(() =>
+            Alert.alert("Error", "WhatsApp is not installed on your device."),
+          ),
       },
       {
         text: "Email Support",
@@ -337,7 +376,11 @@ export default function ProfileScreen() {
           style={styles.settingsBtn}
           onPress={() => setIsSettingsModalVisible(true)}
         >
-          <Ionicons name="settings-outline" size={22} color={Colors.text || "#0F172A"} />
+          <Ionicons
+            name="settings-outline"
+            size={22}
+            color={Colors.text || "#0F172A"}
+          />
         </TouchableOpacity>
       </View>
 
@@ -351,17 +394,21 @@ export default function ProfileScreen() {
           onEditPress={handleOpenEditModal}
           onAddPhone={handleOpenEditModal}
           onAddEmail={() =>
-            Alert.alert("Email Address", "Email is managed securely via account settings.")
+            Alert.alert(
+              "Email Address",
+              "Email is managed securely via account settings.",
+            )
           }
         />
 
-        {supabaseProfile?.membership_tier && supabaseProfile.membership_tier !== "standard" && (
-          <MembershipBanner
-            memberSince="New Member"
-            tier={TIER_DISPLAY[supabaseProfile.membership_tier]}
-            onPressBanner={() => router.push("/membership/status" as any)}
-          />
-        )}
+        {supabaseProfile?.membership_tier &&
+          supabaseProfile.membership_tier !== "standard" && (
+            <MembershipBanner
+              memberSince="New Member"
+              tier={TIER_DISPLAY[supabaseProfile.membership_tier]}
+              onPressBanner={() => router.push("/membership/status" as any)}
+            />
+          )}
 
         <MyVehiclesSection
           savedCards={savedCards}
@@ -472,7 +519,9 @@ export default function ProfileScreen() {
           <View style={styles.modalContent}>
             <View style={styles.settingsHeader}>
               <Text style={styles.modalTitle}>Settings</Text>
-              <TouchableOpacity onPress={() => setIsSettingsModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => setIsSettingsModalVisible(false)}
+              >
                 <Ionicons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
@@ -486,7 +535,12 @@ export default function ProfileScreen() {
                 }}
               >
                 <Ionicons name="shield-checkmark" size={20} color="#2563EB" />
-                <Text style={[styles.settingItemText, { color: "#2563EB", fontWeight: "700" }]}>
+                <Text
+                  style={[
+                    styles.settingItemText,
+                    { color: "#2563EB", fontWeight: "700" },
+                  ]}
+                >
                   Admin Control Center
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color="#2563EB" />
@@ -500,7 +554,11 @@ export default function ProfileScreen() {
                 handleOpenEditModal();
               }}
             >
-              <Ionicons name="person-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color={Colors.primary || "#2563EB"}
+              />
               <Text style={styles.settingItemText}>Account Details</Text>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </TouchableOpacity>
@@ -512,7 +570,11 @@ export default function ProfileScreen() {
                 router.push("/membership" as any);
               }}
             >
-              <Ionicons name="ribbon-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Ionicons
+                name="ribbon-outline"
+                size={20}
+                color={Colors.primary || "#2563EB"}
+              />
               <Text style={styles.settingItemText}>Membership & Plans</Text>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </TouchableOpacity>
@@ -524,7 +586,11 @@ export default function ProfileScreen() {
                 handleHelpAndSupport();
               }}
             >
-              <Ionicons name="headset-outline" size={20} color={Colors.primary || "#2563EB"} />
+              <Ionicons
+                name="headset-outline"
+                size={20}
+                color={Colors.primary || "#2563EB"}
+              />
               <Text style={styles.settingItemText}>Help & Support</Text>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </TouchableOpacity>
@@ -537,7 +603,9 @@ export default function ProfileScreen() {
               }}
             >
               <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-              <Text style={[styles.settingItemText, { color: "#EF4444" }]}>Log Out</Text>
+              <Text style={[styles.settingItemText, { color: "#EF4444" }]}>
+                Log Out
+              </Text>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </TouchableOpacity>
           </View>
